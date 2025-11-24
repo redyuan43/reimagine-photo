@@ -41,21 +41,28 @@ export const analyzeImage = async (file: File): Promise<AnalysisResponse | null>
     const base64Data = await blobToBase64(file);
 
     const prompt = `
-      As a Professional Photo Retouching Expert, analyze this image and create a repair plan.
+      Act as a World-Class Senior Retoucher and Professional Photographer.
+      Conduct a critical, granular analysis of this image. Do not be polite; be technically precise.
       
+      You MUST scrutinize:
+      1. **Body & Figure**: Look for belly bulges, folds, posture issues, double chins, or unflattering angles.
+      2. **Composition**: Check for messy backgrounds, distractions, rule of thirds violations, or cropping issues.
+      3. **Lighting & Color**: Identify overexposure, skin tone imbalances, or lack of dynamic range.
+      4. **Details**: Flyaway hairs, skin blemishes, clothes wrinkles.
+
       Output strict JSON format:
       {
         "analysis": [
           {
             "id": "1",
-            "problem": "Description of the problem (in Chinese)",
-            "solution": "Proposed solution (in Chinese)",
-            "engine": "Recommended technique (e.g., Inpainting, Color Grade)",
+            "problem": "Description of the problem (in Chinese). Be direct.",
+            "solution": "Professional retouching solution (in Chinese).",
+            "engine": "Technique (e.g., Liquify, Frequency Separation, Inpainting)",
             "type": "generative" | "adjustment"
           }
         ]
       }
-      Identify at least 3-4 significant improvements. Language: Chinese.
+      Identify at least 4-5 significant, professional-level improvements. Language: Chinese.
     `;
 
     const response: GenerateContentResponse = await client.models.generateContent({
@@ -86,7 +93,7 @@ export const analyzeImage = async (file: File): Promise<AnalysisResponse | null>
   }
 };
 
-// Editing Service (Using Gemini 3 Pro Image Preview)
+// Editing Service (Using Flash for speed, Pro for Upscale)
 export const editImage = async (
   imageBlob: Blob, 
   activeSteps: PlanItem[], 
@@ -100,8 +107,14 @@ export const editImage = async (
 
     let promptText = "";
     const parts: any[] = [];
+    
+    // Model Selection: Use Gemini 3 Pro for high-quality standard edits as requested
+    let modelName = 'gemini-3-pro-image-preview';
+    let imageConfig: any = {};
 
     if (isUpscale) {
+      // 4K Upscale Configuration
+      imageConfig = { imageSize: "4K" };
       promptText = "Upscale this image to 4K resolution. Enhance details, sharpen edges, and improve texture while maintaining the exact original composition and identity.";
       parts.push({ text: promptText });
       parts.push({ inlineData: { mimeType: imageBlob.type, data: base64Data } });
@@ -148,12 +161,10 @@ export const editImage = async (
     }
 
     const response: GenerateContentResponse = await client.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: modelName,
       contents: { parts },
       config: {
-        imageConfig: {
-          imageSize: isUpscale ? "4K" : "1K" 
-        }
+        imageConfig: Object.keys(imageConfig).length > 0 ? imageConfig : undefined
       }
     });
 

@@ -9,7 +9,11 @@ import {
   XMarkIcon, 
   TrashIcon,
   Squares2X2Icon,
-  HashtagIcon
+  HashtagIcon,
+  CheckIcon,
+  EyeDropperIcon,
+  MagnifyingGlassPlusIcon,
+  MagnifyingGlassMinusIcon
 } from '@heroicons/react/24/outline';
 
 interface CanvasMaskEditorProps {
@@ -20,7 +24,20 @@ interface CanvasMaskEditorProps {
 }
 
 type Tool = 'brush' | 'rect' | 'arrow' | 'text' | 'comment' | 'pan';
-const COLORS = ['#FF4081', '#F44336', '#FFEB3B', '#2196F3', '#FFFFFF', '#000000'];
+
+// Advanced Color Picker Helper
+const hexToRgb = (hex: string) => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : { r: 0, g: 0, b: 0 };
+};
+
+const rgbToHex = (r: number, g: number, b: number) => {
+  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+};
 
 export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   imageSrc,
@@ -39,9 +56,9 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   
   // Tools & Settings
   const [tool, setTool] = useState<Tool>('brush');
-  const [color, setColor] = useState(COLORS[0]); // Default Pink
+  const [color, setColor] = useState('#FF4081'); 
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [brushSize] = useState(8); // Fixed stroke width for annotations
+  const [brushSize] = useState(8); 
   
   // Viewport State (Zoom/Pan)
   const [scale, setScale] = useState(1);
@@ -49,8 +66,15 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
-  // Text Input State
-  const [textInput, setTextInput] = useState<{x: number, y: number, value: string} | null>(null);
+  // Annotation State
+  const [pendingAnnotation, setPendingAnnotation] = useState<{
+      type: 'comment' | 'text';
+      x: number; 
+      y: number;
+      w?: number; // For comment rect
+      h?: number;
+  } | null>(null);
+  const [inputValue, setInputValue] = useState('');
 
   // History for Undo/Redo
   const [history, setHistory] = useState<ImageData[]>([]);
@@ -59,6 +83,13 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   // Temporary shape drawing
   const [startPos, setStartPos] = useState<{x: number, y: number} | null>(null);
   const [tempSnapshot, setTempSnapshot] = useState<ImageData | null>(null);
+
+  // Color Picker Internal State
+  const [rgb, setRgb] = useState({ r: 255, g: 64, b: 129 });
+
+  useEffect(() => {
+      setRgb(hexToRgb(color));
+  }, [color]);
 
   // Initialize Canvas
   useEffect(() => {
@@ -78,21 +109,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
           setContext(ctx);
           
           // Initial Fit
-          const containerAspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
-          const imgAspect = img.naturalWidth / img.naturalHeight;
-          let initScale = 1;
-          
-          if (imgAspect > containerAspect) {
-            initScale = (containerRef.current.clientWidth * 0.95) / img.naturalWidth;
-          } else {
-            initScale = (containerRef.current.clientHeight * 0.95) / img.naturalHeight;
-          }
-          setScale(initScale);
-          
-          setOffset({
-            x: (containerRef.current.clientWidth - img.naturalWidth * initScale) / 2,
-            y: (containerRef.current.clientHeight - img.naturalHeight * initScale) / 2
-          });
+          fitToScreen(img.naturalWidth, img.naturalHeight);
 
           const blankState = ctx.getImageData(0, 0, canvas.width, canvas.height);
           setHistory([blankState]);
@@ -101,6 +118,25 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
       }
     };
   }, [imageSrc]);
+
+  const fitToScreen = (w: number, h: number) => {
+      if (!containerRef.current) return;
+      const containerAspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+      const imgAspect = w / h;
+      let initScale = 1;
+      
+      if (imgAspect > containerAspect) {
+        initScale = (containerRef.current.clientWidth * 0.95) / w;
+      } else {
+        initScale = (containerRef.current.clientHeight * 0.95) / h;
+      }
+      setScale(initScale);
+      
+      setOffset({
+        x: (containerRef.current.clientWidth - w * initScale) / 2,
+        y: (containerRef.current.clientHeight - h * initScale) / 2
+      });
+  };
 
   // --- Coordinate Helpers ---
   const getCanvasCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
@@ -127,7 +163,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
 
   // --- Shape Drawing Functions ---
   const drawArrow = (ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number) => {
-      const headlen = 25 / scale; // scale independent size
+      const headlen = 25 / scale; 
       const angle = Math.atan2(toY - fromY, toX - fromX);
       
       ctx.beginPath();
@@ -144,64 +180,23 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
       ctx.fill();
   };
 
-  const drawCommentMarker = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
-      const size = 40 / scale;
-      
-      ctx.save();
-      ctx.fillStyle = color;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3 / scale;
-      
-      ctx.beginPath();
-      // Bubble shape
-      ctx.moveTo(x, y);
-      ctx.bezierCurveTo(x - size, y - size, x + size, y - size, x + size, y);
-      ctx.bezierCurveTo(x + size, y + size, x - size/2, y + size, x - size/2, y + size * 1.3);
-      ctx.lineTo(x, y + size/2);
-      ctx.fill();
-      ctx.stroke();
-      
-      // Plus sign
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 4 / scale;
-      ctx.beginPath();
-      ctx.moveTo(x - size/4, y);
-      ctx.lineTo(x + size/4, y);
-      ctx.moveTo(x, y - size/4);
-      ctx.lineTo(x, y + size/4);
-      ctx.stroke();
-      
-      ctx.restore();
-  };
-
   // --- Interaction Handlers ---
   const startAction = (e: React.MouseEvent | React.TouchEvent) => {
-    // Pan override with Middle Mouse or Ctrl+Left
     if (tool === 'pan' || (e as React.MouseEvent).button === 1 || (e as React.MouseEvent).ctrlKey) {
         startPan(e);
         return;
     }
 
-    // Finalize text if open
-    if (textInput) {
-        finalizeText();
-        return;
+    if (pendingAnnotation) {
+        return; 
     }
 
     if (!context || !canvasRef.current) return;
     const { x, y } = getCanvasCoordinates(e);
     
     if (tool === 'text') {
-        setTextInput({ x, y, value: '' });
-        return;
-    }
-
-    if (tool === 'comment') {
-        saveSnapshot();
-        drawCommentMarker(context, x, y);
-        saveHistory();
-        setHasChanges(true);
-        generateMaskBlob();
+        setPendingAnnotation({ type: 'text', x, y });
+        setInputValue('');
         return;
     }
     
@@ -215,6 +210,14 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
     context.strokeStyle = color;
     context.fillStyle = color;
     context.lineWidth = brushSize / scale;
+    
+    // Reset Dash
+    context.setLineDash([]);
+
+    if (tool === 'comment') {
+        context.setLineDash([10 / scale, 10 / scale]);
+        context.lineWidth = 4 / scale;
+    }
   };
 
   const moveAction = (e: React.MouseEvent | React.TouchEvent) => {
@@ -229,12 +232,11 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
     if (tool === 'brush') {
         context.lineTo(x, y);
         context.stroke();
-    } else if (tool === 'rect' || tool === 'arrow') {
+    } else if (tool === 'rect' || tool === 'arrow' || tool === 'comment') {
         restoreSnapshot();
-        if (tool === 'rect') {
+        if (tool === 'rect' || tool === 'comment') {
             const w = x - startPos.x;
             const h = y - startPos.y;
-            context.lineWidth = 6 / scale;
             context.strokeRect(startPos.x, startPos.y, w, h);
         } else if (tool === 'arrow') {
             drawArrow(context, startPos.x, startPos.y, x, y);
@@ -242,22 +244,77 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
     }
   };
 
-  const endAction = () => {
+  const endAction = (e: React.MouseEvent | React.TouchEvent) => {
     if (isPanning) {
         setIsPanning(false);
         return;
     }
-    if (!isDrawing) return;
+    if (!isDrawing || !startPos) return;
+    
+    const { x, y } = getCanvasCoordinates(e);
     
     setIsDrawing(false);
-    setStartPos(null);
-    setTempSnapshot(null);
-    saveHistory();
-    setHasChanges(true);
-    generateMaskBlob();
+    
+    if (tool === 'comment') {
+        const w = x - startPos.x;
+        const h = y - startPos.y;
+        setPendingAnnotation({ type: 'comment', x: startPos.x, y: startPos.y, w, h });
+        setInputValue('');
+    } else {
+        setStartPos(null);
+        setTempSnapshot(null);
+        saveHistory();
+        setHasChanges(true);
+        generateMaskBlob();
+    }
   };
 
-  // --- History & Snapshot Helpers ---
+  const commitAnnotation = () => {
+      if (!pendingAnnotation || !context) return;
+      
+      if (inputValue.trim()) {
+          context.save();
+          context.fillStyle = color;
+          context.font = `bold ${24/scale}px sans-serif`;
+          context.textBaseline = 'top';
+          
+          let textX = pendingAnnotation.x;
+          let textY = pendingAnnotation.y;
+          
+          if (pendingAnnotation.type === 'comment' && pendingAnnotation.h) {
+              textY = pendingAnnotation.y + pendingAnnotation.h + (10/scale);
+              textX = pendingAnnotation.x;
+          }
+
+          context.fillStyle = color;
+          context.fillText(inputValue, textX, textY);
+          context.restore();
+          
+          saveHistory();
+          setHasChanges(true);
+          generateMaskBlob();
+      } else {
+          if (pendingAnnotation.type === 'comment') {
+             undo(); 
+          }
+      }
+
+      setPendingAnnotation(null);
+      setTempSnapshot(null); 
+      setStartPos(null);
+  };
+
+  const cancelAnnotation = () => {
+      if (pendingAnnotation) {
+          if (pendingAnnotation.type === 'comment') {
+              restoreSnapshot();
+          }
+          setPendingAnnotation(null);
+          setTempSnapshot(null);
+          setStartPos(null);
+      }
+  };
+
   const saveSnapshot = () => {
       if (context && canvasRef.current) {
           setTempSnapshot(context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height));
@@ -288,7 +345,6 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
           generateMaskBlob();
           if (historyStep - 1 === 0) setHasChanges(false);
       } else if (historyStep === 0 && context) {
-          // Undo initial state (clear)
           const prev = history[0];
           context.putImageData(prev, 0, 0);
           setHasChanges(false);
@@ -304,25 +360,8 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
       }
   };
 
-  // --- Text Input Logic ---
-  const finalizeText = () => {
-      if (!textInput || !context) return;
-      if (textInput.value.trim()) {
-          saveSnapshot();
-          context.font = `bold ${32/scale}px sans-serif`;
-          context.fillStyle = color;
-          context.fillText(textInput.value, textInput.x, textInput.y + (32/scale));
-          saveHistory();
-          setHasChanges(true);
-          generateMaskBlob();
-      }
-      setTextInput(null);
-  };
-
-  // --- Mask Generation (Inpainting Mask) ---
   const generateMaskBlob = () => {
     if (!canvasRef.current) return;
-    // Create binary mask for inpainting
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = canvasRef.current.width;
     maskCanvas.height = canvasRef.current.height;
@@ -367,6 +406,36 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
      }
   };
 
+  const zoomIn = () => setScale(s => Math.min(s + 0.2, 5));
+  const zoomOut = () => setScale(s => Math.max(0.1, s - 0.2));
+  const resetZoom = () => {
+      if (canvasRef.current) fitToScreen(canvasRef.current.width, canvasRef.current.height);
+  };
+
+  const getPopupStyle = () => {
+      if (!pendingAnnotation) return { display: 'none' };
+      let px = pendingAnnotation.x * scale + offset.x;
+      let py = pendingAnnotation.y * scale + offset.y;
+
+      if (pendingAnnotation.type === 'comment' && pendingAnnotation.h) {
+          py += (pendingAnnotation.h * scale) + 10;
+      } else {
+          py += 20;
+      }
+      
+      return {
+          left: px + 'px',
+          top: py + 'px',
+          position: 'absolute' as const,
+          zIndex: 100
+      };
+  };
+
+  const updateColor = (r: number, g: number, b: number) => {
+      setRgb({r, g, b});
+      setColor(rgbToHex(r, g, b));
+  };
+
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-[#121212] overflow-hidden select-none group">
       
@@ -391,44 +460,56 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
         }}>
             <img ref={imageRef} src={imageSrc} className="absolute top-0 left-0 pointer-events-none" draggable={false} style={{maxWidth:'none'}}/>
             <canvas ref={canvasRef} className="absolute top-0 left-0" />
-            
-            {/* Text Input Overlay */}
-            {textInput && (
-                <input 
-                    autoFocus
-                    type="text"
-                    value={textInput.value}
-                    onChange={e => setTextInput({...textInput, value: e.target.value})}
-                    onKeyDown={e => e.key === 'Enter' && finalizeText()}
-                    onBlur={finalizeText}
-                    placeholder="Type..."
-                    className="absolute bg-transparent border border-blue-500 outline-none p-1 m-0 font-bold shadow-sm"
-                    style={{
-                        left: textInput.x,
-                        top: textInput.y,
-                        fontSize: `${32/scale}px`,
-                        color: color,
-                        minWidth: '150px'
-                    }}
-                />
-            )}
         </div>
+        
+        {pendingAnnotation && (
+            <div style={getPopupStyle()}>
+                <div className="flex items-center bg-[#1E1E1E] border border-white/20 rounded-full shadow-2xl p-1 animate-in fade-in zoom-in duration-200">
+                    <input 
+                        autoFocus
+                        type="text"
+                        value={inputValue}
+                        onChange={e => setInputValue(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && commitAnnotation()}
+                        placeholder={pendingAnnotation.type === 'comment' ? "Add a comment..." : "Add text..."}
+                        className="bg-transparent border-none outline-none text-white text-sm px-3 py-1 w-48 placeholder-zinc-500"
+                    />
+                    <button 
+                        onClick={commitAnnotation}
+                        className="p-1.5 bg-[#333] hover:bg-[#444] rounded-full text-white transition-colors"
+                    >
+                        <CheckIcon className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        )}
+      </div>
+
+      {/* --- Zoom Controls --- */}
+      <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-40 flex gap-2">
+           <button onClick={zoomOut} className="p-2 bg-[#262626] rounded-full text-zinc-400 hover:text-white border border-white/10 shadow-lg" title="Zoom Out">
+               <MagnifyingGlassMinusIcon className="w-5 h-5" />
+           </button>
+           <button onClick={resetZoom} className="px-3 py-2 bg-[#262626] rounded-full text-zinc-400 hover:text-white text-xs font-medium border border-white/10 shadow-lg">
+               {(scale * 100).toFixed(0)}%
+           </button>
+           <button onClick={zoomIn} className="p-2 bg-[#262626] rounded-full text-zinc-400 hover:text-white border border-white/10 shadow-lg" title="Zoom In">
+               <MagnifyingGlassPlusIcon className="w-5 h-5" />
+           </button>
       </div>
 
       {/* --- Annanote Toolbar --- */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50">
           <div className="flex items-center bg-[#262626] rounded-full px-2 py-1.5 shadow-2xl border border-white/10 gap-1">
               
-              {/* Grid / Drag Handle */}
               <div className="p-2 text-zinc-500 cursor-grab">
                   <Squares2X2Icon className="w-5 h-5" />
               </div>
 
-              {/* Tool Group 1 */}
               <button
                 onClick={() => setTool('comment')}
                 className={`p-2 rounded-lg transition-all ${tool === 'comment' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                title="Add Comment"
+                title="Comment (Box + Text)"
               >
                   <ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5" />
               </button>
@@ -436,7 +517,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button
                 onClick={() => setTool('arrow')}
                 className={`p-2 rounded-lg transition-all ${tool === 'arrow' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                title="Add Arrow"
+                title="Arrow"
               >
                   <ArrowLongLeftIcon className="w-5 h-5" />
               </button>
@@ -444,7 +525,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button
                 onClick={() => setTool('rect')}
                 className={`p-2 rounded-lg transition-all ${tool === 'rect' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                title="Add Rectangle"
+                title="Rectangle"
               >
                   <StopIcon className="w-5 h-5" />
               </button>
@@ -452,7 +533,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button
                 onClick={() => setTool('text')}
                 className={`p-2 rounded-lg transition-all ${tool === 'text' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                title="Add Text"
+                title="Text"
               >
                   <HashtagIcon className="w-5 h-5" />
               </button>
@@ -472,29 +553,59 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
                     className="w-6 h-6 rounded-full border border-white/20 flex items-center justify-center hover:scale-110 transition-transform"
                     style={{ backgroundColor: color }}
                   />
+                  
                   {showColorPicker && (
-                      <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-[#262626] p-2 rounded-xl shadow-xl border border-white/10 flex gap-2 animate-in slide-in-from-bottom-2 fade-in duration-200">
-                          {COLORS.map(c => (
+                      <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-[#1E1E1E] p-4 rounded-xl shadow-xl border border-white/10 w-64 animate-in slide-in-from-bottom-2 fade-in duration-200">
+                          {/* Gradient Area (Simulated) */}
+                          <div 
+                            className="w-full h-24 rounded-lg mb-3 relative"
+                            style={{
+                                background: `linear-gradient(to bottom, transparent, #000), linear-gradient(to right, #FFF, hsl(${rgb.r}, 100%, 50%))`
+                            }}
+                          >
+                             <div className="absolute top-2 right-2 w-4 h-4 border-2 border-white rounded-full shadow-md"></div>
+                          </div>
+
+                          {/* Hue Slider */}
+                          <input 
+                            type="range" min="0" max="360" className="w-full h-3 rounded-full mb-4 appearance-none"
+                            style={{background: 'linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red)'}}
+                          />
+
+                          {/* RGB Inputs */}
+                          <div className="flex gap-2 justify-between mb-3">
+                              <div className="flex flex-col items-center">
+                                  <input type="number" value={rgb.r} onChange={e => updateColor(Number(e.target.value), rgb.g, rgb.b)} className="w-14 bg-[#333] text-white text-center rounded py-1 text-xs border border-white/10" />
+                                  <span className="text-[10px] text-zinc-500 mt-1">R</span>
+                              </div>
+                              <div className="flex flex-col items-center">
+                                  <input type="number" value={rgb.g} onChange={e => updateColor(rgb.r, Number(e.target.value), rgb.b)} className="w-14 bg-[#333] text-white text-center rounded py-1 text-xs border border-white/10" />
+                                  <span className="text-[10px] text-zinc-500 mt-1">G</span>
+                              </div>
+                              <div className="flex flex-col items-center">
+                                  <input type="number" value={rgb.b} onChange={e => updateColor(rgb.r, rgb.g, Number(e.target.value))} className="w-14 bg-[#333] text-white text-center rounded py-1 text-xs border border-white/10" />
+                                  <span className="text-[10px] text-zinc-500 mt-1">B</span>
+                              </div>
+                          </div>
+                          
+                          {/* Preset: Pink */}
+                          <div className="flex gap-2 items-center pt-2 border-t border-white/10">
+                              <EyeDropperIcon className="w-4 h-4 text-zinc-400" />
                               <button 
-                                key={c} 
-                                onClick={() => { setColor(c); setShowColorPicker(false); }}
-                                className="w-6 h-6 rounded-full border border-white/10 hover:scale-125 transition-transform"
-                                style={{ backgroundColor: c }}
+                                onClick={() => { setColor('#FF4081'); setRgb(hexToRgb('#FF4081')); }}
+                                className="w-6 h-6 rounded-full bg-[#FF4081] border border-white/20"
                               />
-                          ))}
+                          </div>
                       </div>
                   )}
               </div>
 
-              {/* Divider */}
               <div className="w-px h-6 bg-white/10 mx-1"></div>
 
-              {/* Actions */}
               <button 
                 onClick={undo} 
                 disabled={historyStep <= 0} 
                 className="p-2 text-zinc-400 hover:text-white disabled:opacity-20 transition-colors"
-                title="Undo"
               >
                   <ArrowUturnLeftIcon className="w-5 h-5" />
               </button>
@@ -502,12 +613,10 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button 
                 onClick={clearCanvas} 
                 className="p-2 text-zinc-400 hover:text-white transition-colors"
-                title="Clear"
               >
                   <TrashIcon className="w-5 h-5" />
               </button>
 
-              {/* Add to Chat Button */}
               <button 
                 onClick={() => hasChanges && onSubmit()}
                 disabled={!hasChanges}
@@ -516,14 +625,13 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
                   + Add to chat
               </button>
 
-              {/* Close */}
               <button onClick={onCancel} className="p-2 ml-1 text-zinc-400 hover:text-white">
                   <XMarkIcon className="w-5 h-5" />
               </button>
           </div>
           
           <div className="text-center mt-3 text-[10px] text-zinc-500 font-medium tracking-widest uppercase opacity-50">
-              Draw to Annotate • Ctrl+Wheel to Zoom
+              Annotate Mode • Ctrl+Wheel to Zoom
           </div>
       </div>
 

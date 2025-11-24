@@ -145,30 +145,54 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     };
 
     if (status === 'ready') {
+      // Initial planning phase: Add to plan, execute all together
       setPlanItems((prev) => [...prev, newStep]);
       setUserInput('');
     } else if (status === 'completed') {
-      const updatedItems = [...planItems, newStep];
-      setPlanItems(updatedItems);
+      // Iterative phase: Add to list for record, but execute strictly based on current state
+      setPlanItems((prev) => [...prev, newStep]);
       setUserInput('');
-      // Re-run generation with accumulated steps
-      await executeMagic(updatedItems);
+      await executeMagic(undefined, newStep.solution); // Pass the specific instruction
     }
   };
 
-  const executeMagic = async (itemsOverride?: PlanItem[]) => {
-    if (!imageFile) return;
+  const executeMagic = async (itemsOverride?: PlanItem[], specificInstruction?: string) => {
+    // If specificInstruction is provided, we are in Iterative Mode (Completed).
+    // If not, we are likely in Initial Mode (Ready) or re-running full stack.
     
-    const currentItems = itemsOverride || planItems;
-    const activeSteps = currentItems.filter((item) => item.checked);
-    
+    // Determine Source Image
+    let sourceBlob: Blob | null = null;
+    let activeSteps: PlanItem[] = [];
+    let instruction = "";
+
+    if (status === 'completed' || specificInstruction) {
+        // --- ITERATIVE MODE ---
+        // We use the CURRENT image as the base, and apply ONLY the new instruction.
+        if (!currentDisplayImage) return;
+        sourceBlob = await urlToBlob(currentDisplayImage);
+        activeSteps = []; // No steps from history, they are baked in.
+        instruction = specificInstruction || "";
+    } else {
+        // --- INITIAL MODE ---
+        // We use the ORIGINAL file and apply selected plan items.
+        if (!imageFile) return;
+        sourceBlob = imageFile;
+        const currentItems = itemsOverride || planItems;
+        activeSteps = currentItems.filter((item) => item.checked);
+        instruction = ""; // Instructions are embedded in activeSteps
+    }
+
+    if (!sourceBlob) return;
+
     setStatus('executing');
     setCurrentActiveStepIndex(0);
     setIsProcessing(true);
 
+    // Fake progress for UX
     const progressInterval = setInterval(() => {
         setCurrentActiveStepIndex(prev => {
-            if (prev < activeSteps.length - 1) {
+            // Only animate if we have steps to show
+            if (activeSteps.length > 0 && prev < activeSteps.length - 1) {
                 return prev + 1;
             }
             return prev; 
@@ -176,7 +200,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     }, 2000); 
 
     try {
-        const resultUrl = await editImage(imageFile, activeSteps, "");
+        const resultUrl = await editImage(sourceBlob, activeSteps, instruction);
         
         clearInterval(progressInterval);
         
@@ -188,7 +212,10 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         setCurrentActiveStepIndex(-1);
     } catch (e) {
         clearInterval(progressInterval);
-        setStatus('ready');
+        // If we failed in initial mode, go back to ready. If iterative, stay completed.
+        if (status === 'ready') setStatus('ready');
+        else setStatus('completed'); 
+        
         alert("Generation failed. Please try again.");
     } finally {
         setIsProcessing(false);
@@ -272,7 +299,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                 <button 
                     onClick={handleUndo} 
                     disabled={historyIndex <= 0}
-                    className="p-3 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-md disabled:opacity-30 transition-all"
+                    className="p-3 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-md disabled:opacity-30 transition-all shadow-lg border border-white/10"
                     title="Undo"
                 >
                     <ArrowUturnLeftIcon className="w-5 h-5" />
@@ -280,7 +307,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                 <button 
                     onClick={handleRedo} 
                     disabled={historyIndex >= imageHistory.length - 1}
-                    className="p-3 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-md disabled:opacity-30 transition-all"
+                    className="p-3 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-md disabled:opacity-30 transition-all shadow-lg border border-white/10"
                     title="Redo"
                 >
                     <ArrowUturnRightIcon className="w-5 h-5" />
