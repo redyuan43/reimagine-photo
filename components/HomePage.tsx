@@ -391,14 +391,29 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
         }
 
         for (let i = flyingObjects.length - 1; i >= 0; i--) {
-            flyingObjects[i].update();
-            flyingObjects[i].draw(ctx);
-            if (flyingObjects[i].checkStatus()) {
+            const obj = flyingObjects[i];
+            // Remove objects that don't belong to current theme
+            // Sakura in Night OR Meteor in Day
+            if ((isNightRef.current && obj.mode === 'sakura') || (!isNightRef.current && obj.mode === 'meteor')) {
+                flyingObjects.splice(i, 1);
+                continue;
+            }
+
+            obj.update();
+            obj.draw(ctx);
+            if (obj.checkStatus()) {
                 flyingObjects.splice(i, 1);
             }
         }
 
         for (let i = particles.length - 1; i >= 0; i--) {
+            // Remove particles incompatible with current theme
+            // Spark in Day OR Pollen in Night
+            if ((isNightRef.current && particles[i].type !== 'spark') || (!isNightRef.current && particles[i].type === 'spark')) {
+                particles.splice(i, 1);
+                continue;
+            }
+
             particles[i].update();
             particles[i].draw(ctx);
             if (particles[i].life <= 0) {
