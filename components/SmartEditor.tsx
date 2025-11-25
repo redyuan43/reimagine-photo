@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -61,7 +62,8 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   // Translations
   const t = useMemo(() => ({
     en: {
-        analyzing: 'Analyzing Composition...',
+        analyzing: 'Analyzing...',
+        thinking: 'Identifying improvements...',
         confirm: 'Confirm Edits',
         processing: 'Processing Edits...',
         done: 'Done.',
@@ -84,7 +86,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         smartAssistant: 'Smart Assistant',
         newUpload: 'New Upload',
         addBack: 'Add Back',
-        noSuggestions: 'No automatic suggestions. Please input manually below.',
+        noSuggestions: 'Analysis complete. Add custom edits below.',
         issue: 'Issue Detected',
         userRequest: 'User Request',
         processingStep: 'Processing...',
@@ -92,7 +94,8 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         applyingEdits: 'Applying Visual Edits...',
     },
     zh: {
-        analyzing: '正在分析构图...',
+        analyzing: '正在分析...',
+        thinking: '正在识别优化点...',
         confirm: '确认编辑',
         processing: '正在处理编辑...',
         done: '完成',
@@ -115,7 +118,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         smartAssistant: '智能助手',
         newUpload: '重新上传',
         addBack: '加回',
-        noSuggestions: '暂无自动建议，请在下方手动输入。',
+        noSuggestions: '分析完成，请在下方添加自定义编辑。',
         issue: '发现问题',
         userRequest: '用户请求',
         processingStep: '处理中...',
@@ -125,7 +128,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   }), []);
   const dict = t[lang];
 
-  // Initial Load & Analysis
+  // Initial Load & Analysis (Streaming)
   useEffect(() => {
     let isMounted = true;
     const init = async () => {
@@ -136,34 +139,35 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           setImageHistory([imagePreview]);
           setHistoryIndex(0);
       }
+      
+      // Inject initial prompt immediately if exists
+      if (initialPrompt && initialPrompt.trim() !== '') {
+         const promptItem: PlanItem = {
+            id: `custom_init`,
+            problem: dict.userRequest,
+            solution: initialPrompt,
+            engine: 'Smart Engine',
+            type: 'generative',
+            checked: true,
+            isCustom: true
+         };
+         setPlanItems([promptItem]);
+      } else {
+         setPlanItems([]);
+      }
 
-      const result = await analyzeImage(imageFile);
+      // Start Streaming Analysis
+      await analyzeImage(imageFile, (newItem) => {
+          if (isMounted) {
+              setPlanItems(prev => {
+                  // Avoid duplicates
+                  if (prev.find(p => p.id === newItem.id)) return prev;
+                  return [...prev, newItem];
+              });
+          }
+      });
       
       if (isMounted) {
-        let items: PlanItem[] = [];
-        
-        if (result && result.analysis) {
-            items = result.analysis.map((item, idx) => ({
-                ...item,
-                id: item.id || `idx_${idx}`,
-                checked: true,
-            }));
-        }
-
-        // Insert initialPrompt if exists
-        if (initialPrompt && initialPrompt.trim() !== '') {
-            items.push({
-                id: `custom_init`,
-                problem: dict.userRequest,
-                solution: initialPrompt,
-                engine: 'Smart Engine',
-                type: 'generative',
-                checked: true,
-                isCustom: true
-            });
-        }
-
-        setPlanItems(items);
         setStatus('ready');
       }
     };
@@ -171,9 +175,9 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [imageFile]); // Dependency on imageFile ensures this runs once per upload
+  }, [imageFile]); 
 
-  // Scroll to bottom helper
+  // Auto-scroll to bottom as items arrive
   useEffect(() => {
     if (listEndRef.current) {
       listEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -240,42 +244,35 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       isCustom: true,
     };
 
-    if (status === 'ready') {
-      // Initial planning phase: Add to plan, execute all together
+    if (status === 'ready' || status === 'analyzing') {
+      // Add to plan, execute all together later
       setPlanItems((prev) => [...prev, newStep]);
       setUserInput('');
     } else if (status === 'completed') {
-      // Iterative phase: Add to list for record, but execute strictly based on current state
+      // Iterative phase
       setPlanItems((prev) => [...prev, newStep]);
       setUserInput('');
-      await executeMagic(undefined, newStep.solution); // Pass the specific instruction
+      await executeMagic(undefined, newStep.solution); 
     }
   };
 
   const executeMagic = async (itemsOverride?: PlanItem[], specificInstruction?: string) => {
-    // If specificInstruction is provided, we are in Iterative Mode (Completed).
-    // If not, we are likely in Initial Mode (Ready) or re-running full stack.
-    
     // Determine Source Image
     let sourceBlob: Blob | null = null;
     let activeSteps: PlanItem[] = [];
     let instruction = "";
 
     if (status === 'completed' || specificInstruction) {
-        // --- ITERATIVE MODE ---
-        // We use the CURRENT image as the base, and apply ONLY the new instruction.
         if (!currentDisplayImage) return;
         sourceBlob = await urlToBlob(currentDisplayImage);
-        activeSteps = []; // No steps from history, they are baked in.
+        activeSteps = []; 
         instruction = specificInstruction || "";
     } else {
-        // --- INITIAL MODE ---
-        // We use the ORIGINAL file and apply selected plan items.
         if (!imageFile) return;
         sourceBlob = imageFile;
         const currentItems = itemsOverride || planItems;
         activeSteps = currentItems.filter((item) => item.checked);
-        instruction = ""; // Instructions are embedded in activeSteps
+        instruction = ""; 
     }
 
     if (!sourceBlob) return;
@@ -284,10 +281,8 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     setCurrentActiveStepIndex(0);
     setIsProcessing(true);
 
-    // Fake progress for UX
     const progressInterval = setInterval(() => {
         setCurrentActiveStepIndex(prev => {
-            // Only animate if we have steps to show
             if (activeSteps.length > 0 && prev < activeSteps.length - 1) {
                 return prev + 1;
             }
@@ -308,9 +303,9 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         setCurrentActiveStepIndex(-1);
     } catch (e) {
         clearInterval(progressInterval);
-        // If we failed in initial mode, go back to ready. If iterative, stay completed.
-        if (status === 'ready') setStatus('ready');
-        else setStatus('completed'); 
+        if (status === 'analyzing') setStatus('ready'); 
+        else if (status !== 'completed') setStatus('ready');
+        else setStatus('completed');
         
         alert("Generation failed. Please try again.");
     } finally {
@@ -322,7 +317,6 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       if (!currentMaskBlob || !currentDisplayImage) return;
       
       const prompt = userInput.trim() || "Apply edits based on visual annotations.";
-      
       setIsProcessing(true);
       
       try {
@@ -344,7 +338,6 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           if (resultUrl) {
               addToHistory(resultUrl);
               setIsHighRes(false);
-              
               setIsMaskingMode(false);
               setCurrentMaskBlob(null);
               setUserInput('');
@@ -360,7 +353,6 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   const handleUpscale = async () => {
     if (!currentDisplayImage) return;
     setIsUpscaling(true);
-    
     try {
         const blob = await urlToBlob(currentDisplayImage);
         const upscaledUrl = await editImage(blob, [], "", '4K');
@@ -459,7 +451,6 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                     setCurrentMaskBlob(null);
                 }}
                 onSubmit={() => {
-                    // Slight delay to ensure blob is updated
                     setTimeout(executeMaskedEdit, 50);
                 }}
                 lang={lang}
@@ -492,7 +483,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           </div>
         )}
 
-        {/* --- Analysis Scanner --- */}
+        {/* --- Analysis Scanner (Subtle) --- */}
         <AnimatePresence>
           {status === 'analyzing' && (
             <motion.div
@@ -505,11 +496,10 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                 className="absolute left-0 right-0 z-20"
                 initial={{ top: '-10%' }}
                 animate={{ top: '110%' }}
-                transition={{ duration: 2.5, ease: 'easeInOut', repeat: Infinity }}
+                transition={{ duration: 2.0, ease: 'linear', repeat: Infinity }}
               >
-                <div className="h-32 w-full bg-gradient-to-b from-transparent via-blue-500/10 to-blue-500/50 border-b-2 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.6)]"></div>
+                <div className="h-1 w-full bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.8)]"></div>
               </motion.div>
-              <div className="absolute inset-0 bg-blue-900/10 backdrop-blur-[1px]" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -549,139 +539,132 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-          {status === 'analyzing' ? (
-            <div className="space-y-4 animate-pulse">
-              <div className="h-24 bg-gray-100 rounded-xl"></div>
-              <div className="h-24 bg-gray-100 rounded-xl"></div>
-              <div className="h-24 bg-gray-100 rounded-xl"></div>
-            </div>
-          ) : (
+            {/* Step List */}
             <div className="space-y-4">
-              {planItems.map((item, index) => {
-                const activeIndex = getActiveIndex(item.id);
-                const isProcessingThis = status === 'executing' && activeIndex === currentActiveStepIndex;
-                const isDone = status === 'completed' || (status === 'executing' && activeIndex < currentActiveStepIndex);
+              <AnimatePresence>
+                {planItems.map((item, index) => {
+                  const activeIndex = getActiveIndex(item.id);
+                  const isProcessingThis = status === 'executing' && activeIndex === currentActiveStepIndex;
+                  const isDone = status === 'completed' || (status === 'executing' && activeIndex < currentActiveStepIndex);
 
-                if (!item.checked) {
-                    return (
-                        <div 
-                            key={item.id} 
-                            onClick={() => status === 'ready' && toggleItem(item.id)}
-                            className={`border border-transparent bg-gray-50 rounded-2xl p-4 transition-all relative group
-                                ${status === 'ready' 
-                                    ? 'cursor-pointer opacity-60 hover:opacity-100 hover:bg-white hover:shadow-sm hover:border-gray-200' 
-                                    : 'opacity-40'
-                                }
-                            `}
-                        >
-                             <div className="flex gap-3 items-center text-gray-400 group-hover:text-gray-600 transition-colors">
-                                <div className="flex-shrink-0"><ExclamationTriangleIcon className="w-5 h-5" /></div>
-                                <div className="flex-1"><p className="text-sm">{item.problem}</p></div>
-                                {status === 'ready' && (
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-md whitespace-nowrap">
-                                            {dict.addBack}
-                                        </span>
-                                    </div>
-                                )}
-                             </div>
-                        </div>
-                    )
-                }
+                  if (!item.checked) {
+                      return (
+                          <div 
+                              key={item.id} 
+                              onClick={() => (status === 'ready' || status === 'analyzing') && toggleItem(item.id)}
+                              className={`border border-transparent bg-gray-50 rounded-2xl p-4 transition-all relative group cursor-pointer opacity-60 hover:opacity-100 hover:bg-white hover:shadow-sm hover:border-gray-200`}
+                          >
+                              <div className="flex gap-3 items-center text-gray-400 group-hover:text-gray-600 transition-colors">
+                                  <div className="flex-shrink-0"><ExclamationTriangleIcon className="w-5 h-5" /></div>
+                                  <div className="flex-1"><p className="text-sm">{item.problem}</p></div>
+                              </div>
+                          </div>
+                      )
+                  }
 
-                return (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className={`group border rounded-2xl p-4 transition-all duration-300 relative overflow-hidden
-                        ${
-                          isProcessingThis
-                            ? 'bg-purple-50 border-purple-400 shadow-md ring-1 ring-purple-400/30 scale-[1.02]'
-                            : isDone
-                            ? 'bg-green-50/40 border-green-200 shadow-sm'
-                            : 'bg-white border-gray-200'
-                        }
-                    `}
-                  >
-                    <div className="relative z-10">
-                      <div className="flex gap-3 mb-3">
-                        <div className="mt-1 flex-shrink-0">
-                          {item.isCustom ? (
-                              <SparklesIcon className={`w-5 h-5 ${isDone ? 'text-green-500' : 'text-purple-500'}`} />
-                          ) : (
-                              <ExclamationTriangleIcon className={`w-5 h-5 ${isDone ? 'text-green-400' : 'text-red-400'}`} />
-                          )}
-                        </div>
-                        <div>
-                          <h4 className={`text-xs font-bold uppercase tracking-wide mb-0.5 ${isDone ? 'text-green-600' : (item.isCustom ? 'text-purple-500' : 'text-red-500')}`}>
-                            {item.isCustom ? dict.userRequest : dict.issue}
-                          </h4>
-                          <p className="text-sm text-gray-700 font-medium">
-                            {item.problem}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-center mb-3 opacity-20">
-                        <ArrowDownTrayIcon className="w-4 h-4 text-gray-400" />
-                      </div>
-
-                      <div
-                        onClick={() => status === 'ready' && toggleItem(item.id)}
-                        className={`flex gap-3 items-start p-3 rounded-xl cursor-pointer transition-colors 
-                            ${
-                               isDone
-                                  ? 'bg-green-100 text-green-800'
-                                  : isProcessingThis 
-                                    ? 'bg-purple-100 text-purple-900'
-                                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                            }
-                         `}
-                      >
-                        <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all mt-0.5 
-                                 ${
-                                   isDone
-                                     ? 'border-green-500 bg-green-500 scale-110'
-                                     : isProcessingThis
-                                       ? 'border-purple-500 border-t-transparent animate-spin'
-                                       : 'border-purple-500 bg-purple-500'
-                                 }
-                             `}
-                        >
-                          {isDone && (
-                            <CheckIcon className="w-3 h-3 text-white" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold mb-1 flex items-center justify-between">
-                            {item.solution}
-                            {isProcessingThis && (
-                              <span className="text-xs text-purple-600 font-bold animate-pulse">
-                                {dict.processingStep}
-                              </span>
+                  return (
+                    <motion.div
+                      key={item.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      className={`group border rounded-2xl p-4 transition-all duration-300 relative overflow-hidden
+                          ${
+                            isProcessingThis
+                              ? 'bg-purple-50 border-purple-400 shadow-md ring-1 ring-purple-400/30 scale-[1.02]'
+                              : isDone
+                              ? 'bg-green-50/40 border-green-200 shadow-sm'
+                              : 'bg-white border-gray-200'
+                          }
+                      `}
+                    >
+                      <div className="relative z-10">
+                        <div className="flex gap-3 mb-3">
+                          <div className="mt-1 flex-shrink-0">
+                            {item.isCustom ? (
+                                <SparklesIcon className={`w-5 h-5 ${isDone ? 'text-green-500' : 'text-purple-500'}`} />
+                            ) : (
+                                <ExclamationTriangleIcon className={`w-5 h-5 ${isDone ? 'text-green-400' : 'text-red-400'}`} />
                             )}
-                          </p>
+                          </div>
+                          <div>
+                            <h4 className={`text-xs font-bold uppercase tracking-wide mb-0.5 ${isDone ? 'text-green-600' : (item.isCustom ? 'text-purple-500' : 'text-red-500')}`}>
+                              {item.isCustom ? dict.userRequest : dict.issue}
+                            </h4>
+                            <p className="text-sm text-gray-700 font-medium">
+                              {item.problem}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div
+                          onClick={() => (status === 'ready' || status === 'analyzing') && toggleItem(item.id)}
+                          className={`flex gap-3 items-start p-3 rounded-xl cursor-pointer transition-colors 
+                              ${
+                                isDone
+                                    ? 'bg-green-100 text-green-800'
+                                    : isProcessingThis 
+                                      ? 'bg-purple-100 text-purple-900'
+                                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                              }
+                          `}
+                        >
+                          <div
+                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all mt-0.5 
+                                  ${
+                                    isDone
+                                      ? 'border-green-500 bg-green-500 scale-110'
+                                      : isProcessingThis
+                                        ? 'border-purple-500 border-t-transparent animate-spin'
+                                        : 'border-purple-500 bg-purple-500'
+                                  }
+                              `}
+                          >
+                            {isDone && (
+                              <CheckIcon className="w-3 h-3 text-white" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold mb-1 flex items-center justify-between">
+                              {item.solution}
+                              {isProcessingThis && (
+                                <span className="text-xs text-purple-600 font-bold animate-pulse">
+                                  {dict.processingStep}
+                                </span>
+                              )}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+
+              {/* Streaming Loading Indicator */}
+              {status === 'analyzing' && (
+                  <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 bg-gray-50/50"
+                  >
+                      <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-sm text-gray-500 font-medium animate-pulse">{dict.thinking}</span>
                   </motion.div>
-                );
-              })}
+              )}
+              
               <div ref={listEndRef} />
+              
               {planItems.length === 0 && status === 'ready' && (
                 <p className="text-center text-gray-400 text-sm py-4">
                   {dict.noSuggestions}
                 </p>
               )}
             </div>
-          )}
         </div>
 
         <div className="p-4 border-t border-gray-100 bg-white pb-8 z-20">
-          {status === 'ready' && (
+          {(status === 'ready' || status === 'analyzing') && (
             <div className="space-y-3">
               <div className="relative">
                 <input
@@ -702,12 +685,20 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
               <button
                 onClick={() => executeMagic()}
                 disabled={
-                  planItems.filter((i) => i.checked).length === 0 && !userInput
+                   status === 'analyzing' || (planItems.filter((i) => i.checked).length === 0 && !userInput)
                 }
                 className="w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <MagicWandIcon className="w-6 h-6 group-hover:rotate-12 transition-transform" />{' '}
-                {dict.generate}
+                {status === 'analyzing' ? (
+                     <>
+                        <ArrowPathIcon className="w-5 h-5 animate-spin" /> {dict.analyzing}
+                     </>
+                ) : (
+                    <>
+                        <MagicWandIcon className="w-6 h-6 group-hover:rotate-12 transition-transform" />{' '}
+                        {dict.generate}
+                    </>
+                )}
               </button>
             </div>
           )}

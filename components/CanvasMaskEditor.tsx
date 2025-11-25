@@ -13,7 +13,8 @@ import {
   CheckIcon,
   EyeDropperIcon,
   MagnifyingGlassPlusIcon,
-  MagnifyingGlassMinusIcon
+  MagnifyingGlassMinusIcon,
+  HandRaisedIcon
 } from '@heroicons/react/24/outline';
 
 interface CanvasMaskEditorProps {
@@ -57,7 +58,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   const [hasChanges, setHasChanges] = useState(false);
   
   // Tools & Settings
-  const [tool, setTool] = useState<Tool>('brush');
+  const [tool, setTool] = useState<Tool>('pan'); // Default to Pan for better UX
   const [color, setColor] = useState('#FF4081'); 
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [brushSize] = useState(8); 
@@ -92,6 +93,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   // Translations
   const t = useMemo(() => ({
       en: {
+          pan: 'Move / Pan',
           comment: 'Comment (Box + Text)',
           arrow: 'Arrow',
           rect: 'Rectangle',
@@ -105,6 +107,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
           addText: 'Add text...',
       },
       zh: {
+          pan: '移动 / 拖拽',
           comment: '评论 (选框 + 文本)',
           arrow: '箭头',
           rect: '矩形',
@@ -432,6 +435,10 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   };
   
   const handleWheel = (e: React.WheelEvent) => {
+     if (e.ctrlKey || tool === 'pan') { // Allow wheel zoom without Ctrl if in Pan mode (optional, but standard behavior usually requires Ctrl or it scrolls)
+         // Stick to standard Ctrl+Wheel for zoom to avoid conflict with vertical scroll if applicable, 
+         // but here we are full screenish.
+     }
      if (e.ctrlKey) {
          e.preventDefault();
          const delta = -e.deltaY * 0.001;
@@ -538,6 +545,17 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <div className="p-2 text-zinc-500 cursor-grab">
                   <Squares2X2Icon className="w-5 h-5" />
               </div>
+
+              {/* Pan Tool */}
+              <button
+                onClick={() => setTool('pan')}
+                className={`p-2 rounded-lg transition-all ${tool === 'pan' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                title={dict.pan}
+              >
+                  <HandRaisedIcon className="w-5 h-5" />
+              </button>
+
+              <div className="w-px h-6 bg-white/10 mx-1"></div>
 
               <button
                 onClick={() => setTool('comment')}

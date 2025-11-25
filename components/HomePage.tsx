@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PhotoIcon, PaperAirplaneIcon, SparklesIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
@@ -106,22 +107,21 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                 this.pulsePhase = Math.random() * Math.PI * 2;
             }
         }
-        draw() {
+        draw(ctx: CanvasRenderingContext2D) {
             if (isNightRef.current) {
                 const dx = this.x - mouse.x;
                 const dy = this.y - mouse.y;
                 const dist = Math.sqrt(dx*dx + dy*dy);
-                const triggerRange = 40; // Slightly larger for easier interaction on web
+                const triggerRange = 20; 
                 
                 if (dist < triggerRange) {
                     const speed = Math.sqrt(mouse.vx * mouse.vx + mouse.vy * mouse.vy);
                     const force = Math.min(speed * 0.2, 1.0) * (1 - dist / triggerRange);
                     this.glow += force * 0.8; 
                 }
-
                 if (this.glow > 1) this.glow = 1;
                 if (this.glow > 0) {
-                    this.glow -= 0.02; 
+                    this.glow -= 0.02;
                     if (this.glow < 0) this.glow = 0;
                 }
 
@@ -136,47 +136,30 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                 const finalOpacity = Math.min(1, (this.opacity + this.glow * 1.8) * pulse); 
                 const currentSize = (this.baseSize + (this.glow * 3.0)) * pulse;
 
-                ctx!.fillStyle = `rgba(${this.color}, ${finalOpacity})`;
-                ctx!.beginPath();
-                ctx!.arc(this.x, this.y, currentSize, 0, Math.PI * 2);
-                ctx!.fill();
+                ctx.fillStyle = `rgba(${this.color}, ${finalOpacity})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, currentSize, 0, Math.PI * 2);
+                ctx.fill();
             }
         }
     }
 
     class Flyer {
-        x: number = 0;
-        y: number = 0;
-        vx: number = 0;
-        vy: number = 0;
-        len: number = 0;
-        speed: number = 0;
-        size: number = 0;
-        angle: number = 0;
-        life: number = 0;
-        maxLife: number = 0;
-        mode: 'meteor' | 'sakura' = 'meteor';
-        
-        // Sakura specifics
-        speedY: number = 0;
-        speedX: number = 0;
-        sway: number = 0;
-        swayAmp: number = 0;
-        rotation: number = 0;
-        rotationSpeed: number = 0;
-        flip: number = 0;
-        flipSpeed: number = 0;
-        color: string = '';
-        windVx: number = 0;
-        windVy: number = 0;
+        mode: 'meteor' | 'sakura';
+        x: number = 0; y: number = 0;
+        vx: number = 0; vy: number = 0;
+        len: number = 0; speed: number = 0; size: number = 0; angle: number = 0;
+        life: number = 0; maxLife: number = 0;
+        speedY: number = 0; speedX: number = 0; sway: number = 0; swayAmp: number = 0;
+        rotation: number = 0; rotationSpeed: number = 0; flip: number = 0; flipSpeed: number = 0;
+        color: string = ''; windVx: number = 0; windVy: number = 0;
 
         constructor() {
+            this.mode = isNightRef.current ? 'meteor' : 'sakura';
             this.reset();
         }
 
         reset() {
-            this.mode = isNightRef.current ? 'meteor' : 'sakura';
-            
             if (this.mode === 'meteor') {
                 if (Math.random() < 0.5) {
                     this.x = Math.random() * width * 1.5 - width * 0.2; 
@@ -198,12 +181,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                 this.x = Math.random() * width;
                 this.y = -30; 
                 this.size = Math.random() * 5 + 4; 
-                
                 this.speedY = Math.random() * 0.7 + 0.8; 
                 this.speedX = Math.random() * 0.2 - 0.1; 
                 this.sway = Math.random() * 0.005 + 0.002; 
                 this.swayAmp = Math.random() * 1.0 + 0.5; 
-                
                 this.rotation = Math.random() * Math.PI * 2;
                 this.rotationSpeed = (Math.random() - 0.5) * 0.008; 
                 this.flip = Math.random() * Math.PI; 
@@ -213,7 +194,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                 const green = Math.floor(Math.random() * 50 + 180); 
                 const blue = Math.floor(Math.random() * 50 + 190);  
                 this.color = `rgba(${red}, ${green}, ${blue}, ${Math.random() * 0.4 + 0.6})`;
-
                 this.windVx = 0;
                 this.windVy = 0;
             }
@@ -241,7 +221,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
                 this.y += this.speedY + this.windVy; 
                 this.x += this.speedX + Math.sin(this.y * this.sway) * this.swayAmp + this.windVx; 
-                
                 this.rotation += this.rotationSpeed;
                 this.flip += this.flipSpeed;
             }
@@ -277,58 +256,49 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
             return false;
         }
 
-        draw() {
+        draw(ctx: CanvasRenderingContext2D) {
             if (this.mode === 'meteor') {
                 const opacity = Math.sin((Math.min(this.life, this.maxLife) / this.maxLife) * Math.PI);
-                ctx!.save();
-                ctx!.translate(this.x, this.y);
-                ctx!.rotate(Math.atan2(this.vy, this.vx) - Math.PI);
-                const gradient = ctx!.createLinearGradient(0, 0, this.len, 0);
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(Math.atan2(this.vy, this.vx) - Math.PI);
+                const gradient = ctx.createLinearGradient(0, 0, this.len, 0);
                 gradient.addColorStop(0, `rgba(255, 255, 255, ${opacity})`);
                 gradient.addColorStop(0.1, `rgba(255, 255, 255, ${opacity * 0.8})`);
                 gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                ctx!.fillStyle = gradient;
-                ctx!.beginPath();
-                ctx!.moveTo(0, 0);
-                ctx!.lineTo(this.len, -1);
-                ctx!.lineTo(this.len, 1);
-                ctx!.closePath();
-                ctx!.fill();
-                ctx!.restore();
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(this.len, -1);
+                ctx.lineTo(this.len, 1);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
             } else {
                 const flipScale = Math.abs(Math.cos(this.flip));
-                ctx!.save();
-                ctx!.translate(this.x, this.y);
-                ctx!.rotate(this.rotation);
-                ctx!.scale(flipScale, 1); 
-                ctx!.fillStyle = this.color;
-                ctx!.beginPath();
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.scale(flipScale, 1); 
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
                 const s = this.size;
-                ctx!.moveTo(0, s * 0.8); 
-                ctx!.bezierCurveTo(-s * 0.6, s * 0.5, -s, 0, 0, -s);
-                ctx!.bezierCurveTo(s, 0, s * 0.6, s * 0.5, 0, s * 0.8);
-                ctx!.fill();
-                ctx!.restore();
+                ctx.moveTo(0, s * 0.8); 
+                ctx.bezierCurveTo(-s * 0.6, s * 0.5, -s, 0, 0, -s);
+                ctx.bezierCurveTo(s, 0, s * 0.6, s * 0.5, 0, s * 0.8);
+                ctx.fill();
+                ctx.restore();
             }
         }
     }
 
     class Particle {
-        x: number;
-        y: number;
-        type: 'spark' | 'pollen';
-        vx: number = 0;
-        vy: number = 0;
-        life: number = 0;
-        decay: number = 0;
-        gravity: number = 0;
-        color: string = '';
-        size: number = 0;
+        x: number; y: number; type: string;
+        vx: number; vy: number; life: number; decay: number; gravity: number;
+        color: string; size: number;
 
-        constructor(x: number, y: number, type: 'spark' | 'pollen') {
-            this.x = x;
-            this.y = y;
-            this.type = type;
+        constructor(x: number, y: number, type: string) {
+            this.x = x; this.y = y; this.type = type;
             const angle = Math.random() * Math.PI * 2;
             if (type === 'spark') {
                 const speed = Math.random() * 4 + 2;
@@ -363,15 +333,23 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
             this.vy *= 0.95;
             this.life -= this.decay;
         }
-        draw() {
-            ctx!.globalAlpha = Math.max(0, this.life);
-            ctx!.fillStyle = this.color;
-            ctx!.beginPath();
-            ctx!.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx!.fill();
-            ctx!.globalAlpha = 1.0;
+        draw(ctx: CanvasRenderingContext2D) {
+            ctx.globalAlpha = Math.max(0, this.life);
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
         }
     }
+
+    // --- LOGIC ---
+    const createParticles = (x: number, y: number, type: string) => {
+        const count = type === 'spark' ? 30 : 40;
+        for (let i = 0; i < count; i++) {
+            particles.push(new Particle(x, y, type));
+        }
+    };
 
     const createBackground = () => {
         backgroundObjects = [];
@@ -382,15 +360,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
         }
     };
 
-    const createParticles = (x: number, y: number, type: 'spark' | 'pollen') => {
-        const count = type === 'spark' ? 30 : 40; 
-        for (let i = 0; i < count; i++) {
-            particles.push(new Particle(x, y, type));
-        }
-    };
-
-    // --- EVENTS & LOOP ---
-    const handleResize = () => {
+    const resize = () => {
         width = window.innerWidth;
         height = window.innerHeight;
         canvas.width = width;
@@ -398,6 +368,55 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
         createBackground();
     };
 
+    const animate = () => {
+        ctx.clearRect(0, 0, width, height);
+
+        const gradient = ctx.createRadialGradient(width/2, height, 0, width/2, height/2, width);
+        if (isNightRef.current) {
+            gradient.addColorStop(0, 'rgba(27, 39, 53, 0.4)'); 
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); 
+        } else {
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)'); 
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        }
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        backgroundObjects.forEach(obj => obj.draw(ctx));
+
+        // Spawn Rate
+        const spawnRate = isNightRef.current ? 0.0088 : 0.022; 
+        if (Math.random() < spawnRate) {
+            flyingObjects.push(new Flyer());
+        }
+
+        for (let i = flyingObjects.length - 1; i >= 0; i--) {
+            flyingObjects[i].update();
+            flyingObjects[i].draw(ctx);
+            if (flyingObjects[i].checkStatus()) {
+                flyingObjects.splice(i, 1);
+            }
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            particles[i].update();
+            particles[i].draw(ctx);
+            if (particles[i].life <= 0) {
+                particles.splice(i, 1);
+            }
+        }
+        
+        mouse.vx *= 0.8;
+        mouse.vy *= 0.8;
+
+        animationFrameId = requestAnimationFrame(animate);
+    };
+
+    // --- INIT ---
+    resize();
+    animate();
+
+    // Events
     const handleMouseMove = (e: MouseEvent) => {
         const currentX = e.clientX;
         const currentY = e.clientY;
@@ -411,332 +430,257 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
         lastMouse.y = currentY;
     };
 
-    const handleClick = (e: MouseEvent) => {
-        // Only trigger particles if we clicked directly on the background (not controls)
-        // Note: React's event bubbling might handle this differently, but for canvas global listener:
-        if ((e.target as HTMLElement).tagName !== 'CANVAS' && (e.target as HTMLElement).id !== 'root') return;
-        
-        const type = isNightRef.current ? 'spark' : 'pollen';
-        createParticles(e.clientX, e.clientY, type);
-    };
+    const handleWindowResize = () => resize();
 
-    const animate = () => {
-        ctx.clearRect(0, 0, width, height);
-
-        // Background Gradient
-        const gradient = ctx.createRadialGradient(width/2, height, 0, width/2, height/2, width);
-        if (isNightRef.current) {
-            gradient.addColorStop(0, 'rgba(27, 39, 53, 0.4)'); 
-            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); 
-        } else {
-            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)'); 
-            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        }
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-
-        backgroundObjects.forEach(obj => obj.draw());
-
-        // Spawn flyers
-        const spawnRate = isNightRef.current ? 0.0088 : 0.022; 
-        if (Math.random() < spawnRate) {
-            flyingObjects.push(new Flyer());
-        }
-
-        // Update flyers
-        for (let i = flyingObjects.length - 1; i >= 0; i--) {
-            flyingObjects[i].update();
-            flyingObjects[i].draw();
-            if (flyingObjects[i].checkStatus()) {
-                flyingObjects.splice(i, 1);
-            }
-        }
-
-        // Update particles
-        for (let i = particles.length - 1; i >= 0; i--) {
-            particles[i].update();
-            particles[i].draw();
-            if (particles[i].life <= 0) {
-                particles.splice(i, 1);
-            }
-        }
-        
-        mouse.vx *= 0.8;
-        mouse.vy *= 0.8;
-
-        animationFrameId = requestAnimationFrame(animate);
-    };
-
-    // Initialize
-    handleResize();
-    window.addEventListener('resize', handleResize);
     window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('click', handleClick);
-    animate();
-
-    // Export internal reset for theme toggle
-    (canvas as any).__internalReset = () => {
-        flyingObjects = [];
-        particles = [];
-        createBackground();
+    window.addEventListener('resize', handleWindowResize);
+    
+    // Global particle trigger hack for clicks outside button
+    const handleClick = (e: MouseEvent) => {
+         if (!(e.target as HTMLElement).closest('.theme-toggle')) {
+            const type = isNightRef.current ? 'spark' : 'pollen';
+            createParticles(e.clientX, e.clientY, type);
+         }
     };
+    window.addEventListener('click', handleClick);
 
     return () => {
-        window.removeEventListener('resize', handleResize);
         window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('resize', handleWindowResize);
         window.removeEventListener('click', handleClick);
         cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, []); // Run once on mount
 
-  // --- THEME SWITCH LOGIC ---
-  const toggleTheme = (e: React.MouseEvent) => {
-    const btn = e.currentTarget as HTMLElement;
-    const rect = btn.getBoundingClientRect();
+  // Sync ref with state for animation loop
+  useEffect(() => {
+    isNightRef.current = isNight;
+    // We also need to re-trigger background creation if switching to night
+    const canvas = canvasRef.current;
+    if(canvas && isNight) {
+        // Trigger resize logic implicitly to refill stars
+        // Ideally we would expose createBackground but for now resize works
+        window.dispatchEvent(new Event('resize')); 
+    }
+  }, [isNight]);
+
+
+  // --- HANDLERS ---
+  const handleThemeSwitch = (e: React.MouseEvent) => {
+    if (!themeBtnRef.current || !transitionLayerRef.current) return;
+
+    const rect = themeBtnRef.current.getBoundingClientRect();
     const btnX = rect.left + rect.width / 2;
     const btnY = rect.top + rect.height / 2;
-    
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const maxRadius = Math.hypot(Math.max(btnX, width - btnX), Math.max(btnY, height - btnY)) * 1.2;
+    const maxRadius = Math.hypot(Math.max(btnX, window.innerWidth - btnX), Math.max(btnY, window.innerHeight - btnY)) * 1.2;
     const targetColor = isNight ? COLOR_DAY : COLOR_NIGHT;
     
-    const transLayer = transitionLayerRef.current;
-    if (transLayer) {
-        transLayer.style.transition = 'none';
-        transLayer.style.opacity = '1';
-        transLayer.style.backgroundColor = targetColor;
-        transLayer.style.clipPath = `circle(0px at ${btnX}px ${btnY}px)`;
-        transLayer.offsetHeight; // Force reflow
+    const layer = transitionLayerRef.current;
+    
+    layer.style.transition = 'none';
+    layer.style.opacity = '1';
+    layer.style.backgroundColor = targetColor;
+    layer.style.clipPath = `circle(0px at ${btnX}px ${btnY}px)`;
+    // Force reflow
+    void layer.offsetHeight; 
 
-        transLayer.style.transition = 'clip-path 0.8s ease-in-out';
-        transLayer.style.clipPath = `circle(${maxRadius}px at ${btnX}px ${btnY}px)`;
-        
+    layer.style.transition = 'clip-path 0.8s ease-in-out';
+    layer.style.clipPath = `circle(${maxRadius}px at ${btnX}px ${btnY}px)`;
+
+    setTimeout(() => {
+        setIsNight(!isNight);
+        // Fade out layer
+        layer.style.transition = 'opacity 0.8s ease';
+        layer.style.opacity = '0';
         setTimeout(() => {
-            const nextState = !isNight;
-            setIsNight(nextState);
-            isNightRef.current = nextState;
-            
-            // Reset Canvas Entities
-            if (canvasRef.current && (canvasRef.current as any).__internalReset) {
-                (canvasRef.current as any).__internalReset();
-            }
-
-            // Fade out transition layer
-            transLayer.style.transition = 'opacity 0.8s ease';
-            transLayer.style.opacity = '0';
-            
-            setTimeout(() => {
-                transLayer.style.clipPath = `circle(0px at ${btnX}px ${btnY}px)`;
-            }, 800);
+             layer.style.clipPath = `circle(0px at ${btnX}px ${btnY}px)`;
         }, 800);
-    }
+    }, 800);
   };
 
-
-  // --- UI HANDLERS ---
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    dragCounter.current += 1;
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) setIsDragging(true);
+  const handleDrag = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
   };
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    dragCounter.current -= 1;
-    if (dragCounter.current === 0) setIsDragging(false);
+  const handleDragIn = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current++;
+      if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+          setIsDragging(true);
+      }
+  };
+  const handleDragOut = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current--;
+      if (dragCounter.current === 0) setIsDragging(false);
   };
   const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    setIsDragging(false);
-    dragCounter.current = 0;
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onStart(e.dataTransfer.files[0], promptText);
-    }
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      dragCounter.current = 0;
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const file = e.dataTransfer.files[0];
+          handleFileSelect(file);
+          e.dataTransfer.clearData();
+      }
   };
-  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  const handleFileSelect = (file: File) => {
+    if (file.type.startsWith('image/')) {
         setSelectedFile(file);
         setFilePreview(URL.createObjectURL(file));
     }
   };
+
   const handleSubmit = () => {
-      if (selectedFile) onStart(selectedFile, promptText);
-      else fileInputRef.current?.click();
+    if (selectedFile) {
+        onStart(selectedFile, promptText);
+    }
   };
 
-
-  // --- RENDER ---
   return (
-    <div 
-        ref={containerRef}
-        className="relative w-full h-full min-h-screen overflow-hidden transition-colors duration-1000"
-        style={{ backgroundColor: isNight ? COLOR_NIGHT : COLOR_DAY }}
-        onDragEnter={handleDragEnter} 
-        onDragLeave={handleDragLeave} 
-        onDragOver={handleDragOver} 
+    <div className="relative w-full h-full overflow-hidden font-sans" style={{ backgroundColor: isNight ? COLOR_NIGHT : COLOR_DAY, transition: 'background-color 0.8s' }}>
+      
+      {/* 0. Canvas Layers */}
+      <canvas ref={canvasRef} className="absolute inset-0 z-0 block" />
+      <div ref={transitionLayerRef} className="absolute inset-0 z-10 pointer-events-none opacity-0" />
+
+      {/* 1. Theme Toggle */}
+      <button 
+        ref={themeBtnRef}
+        onClick={handleThemeSwitch}
+        className="theme-toggle absolute top-6 right-6 z-50 w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-lg hover:scale-110 hover:rotate-12 transition-all"
+      >
+        {isNight ? (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+        ) : (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        )}
+      </button>
+
+      {/* 1.5 Lang Toggle */}
+      <button 
+        onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
+        className="absolute top-6 right-20 z-50 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-bold shadow-lg hover:bg-white/20 transition-all"
+      >
+          {lang.toUpperCase()}
+      </button>
+
+      {/* 2. Main UI Content (Overlay) */}
+      <div 
+        className="absolute inset-0 z-30 flex flex-col items-center justify-center px-4"
+        onDragEnter={handleDragIn}
+        onDragLeave={handleDragOut}
+        onDragOver={handleDrag}
         onDrop={handleDrop}
-    >
-        {/* Transition Layer */}
-        <div 
-            ref={transitionLayerRef}
-            className="absolute top-0 left-0 w-full h-full z-20 pointer-events-none opacity-0"
-            style={{ clipPath: 'circle(0% at 50% 50%)' }}
-        />
-
-        {/* Canvas Background */}
-        <canvas ref={canvasRef} className="block absolute top-0 left-0 z-0" />
-
-        {/* Drag Overlay */}
-        <AnimatePresence>
+      >
+         {/* Drag Overlay */}
+         <AnimatePresence>
             {isDragging && (
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className={`absolute inset-0 z-50 flex flex-col items-center justify-center backdrop-blur-xl m-4 rounded-3xl border-2 border-dashed ${isNight ? 'bg-black/80 border-blue-500' : 'bg-white/80 border-blue-400'}`}
-            >
-                <ArrowUpTrayIcon className="w-24 h-24 text-blue-500 animate-bounce" />
-                <p className="text-3xl font-bold text-blue-500 mt-6">{dict.dragTip}</p>
-            </motion.div>
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 z-50 bg-purple-600/20 backdrop-blur-sm border-4 border-purple-400 border-dashed m-4 rounded-3xl flex items-center justify-center"
+                >
+                    <div className="text-center text-white">
+                        <ArrowUpTrayIcon className="w-16 h-16 mx-auto mb-4 animate-bounce" />
+                        <h3 className="text-3xl font-bold">{dict.dragTip}</h3>
+                    </div>
+                </motion.div>
             )}
-        </AnimatePresence>
+         </AnimatePresence>
 
-        {/* --- UI LAYER --- */}
-        <div className="absolute inset-0 z-30 pointer-events-none flex flex-col">
-            
-            {/* Top Right Controls */}
-            <div className="flex justify-end p-6 pointer-events-auto gap-4">
+         <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className={`w-full max-w-4xl text-center mb-10 transition-colors duration-700 ${isNight ? 'text-white' : 'text-zinc-800'}`}
+         >
+             <span className="inline-block px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-bold tracking-wider mb-6 backdrop-blur-md">
+                {dict.badge}
+             </span>
+             <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 drop-shadow-lg">
+                <span className="block mb-2">{dict.h1a}</span>
+                <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                    {dict.h1b}
+                </span>
+             </h1>
+             <p className={`text-lg md:text-xl max-w-2xl mx-auto leading-relaxed opacity-80 whitespace-pre-line drop-shadow-md`}>
+                {dict.sub}
+             </p>
+         </motion.div>
+
+         {/* 3. Input & Upload Box */}
+         <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.4 }}
+            className="w-full max-w-2xl"
+         >
+             <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-2 rounded-2xl shadow-2xl flex flex-col md:flex-row gap-2">
+                 {/* Upload Trigger */}
+                 <div className="relative group flex-shrink-0">
+                     <input 
+                        type="file" 
+                        ref={fileInputRef}
+                        onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
+                        className="hidden"
+                        accept="image/*"
+                     />
+                     <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full md:w-32 h-16 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition-all flex flex-col items-center justify-center text-white/80 group-hover:text-white overflow-hidden relative"
+                     >
+                         {filePreview ? (
+                             <img src={filePreview} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                         ) : (
+                             <>
+                                <PhotoIcon className="w-6 h-6 mb-1" />
+                                <span className="text-xs font-medium opacity-70">Upload</span>
+                             </>
+                         )}
+                     </button>
+                 </div>
+
+                 {/* Text Input */}
+                 <div className="flex-1 relative">
+                     <input 
+                        type="text"
+                        value={promptText}
+                        onChange={(e) => setPromptText(e.target.value)}
+                        placeholder={dict.describePlaceholder}
+                        className="w-full h-16 bg-transparent text-white placeholder-white/40 px-4 text-lg outline-none"
+                        onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                     />
+                     {/* Suggestion Pill */}
+                     {!promptText && (
+                        <button 
+                            onClick={() => setPromptText(dict.examplePrompt)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-xs text-white/60 hover:text-white transition-colors border border-white/5 truncate max-w-[120px]"
+                        >
+                            {dict.example}
+                        </button>
+                     )}
+                 </div>
+
+                 {/* Generate Button */}
                  <button 
-                    ref={themeBtnRef}
-                    onClick={toggleTheme}
-                    className="w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 hover:scale-110 hover:rotate-12 shadow-lg outline-none"
-                    style={{ 
-                        background: 'rgba(255, 255, 255, 0.1)', 
-                        borderColor: 'rgba(255, 255, 255, 0.2)',
-                        boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
-                        color: isNight ? '#FFF' : '#333'
-                    }}
+                    onClick={handleSubmit}
+                    disabled={!selectedFile}
+                    className="h-16 px-8 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 group"
                  >
-                    {isNight ? (
-                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-                    ) : (
-                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                    )}
+                     <SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
                  </button>
+             </div>
+             <p className="text-center text-white/40 text-xs mt-4">
+                 {dict.supports}
+             </p>
+         </motion.div>
+      </div>
 
-                 <button
-                    onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-                    className="px-4 h-12 rounded-full font-bold backdrop-blur-md border hover:bg-white/20 transition-all pointer-events-auto"
-                    style={{ 
-                        background: 'rgba(255, 255, 255, 0.1)', 
-                        borderColor: 'rgba(255, 255, 255, 0.2)',
-                        color: isNight ? '#FFF' : '#333'
-                    }}
-                 >
-                    {lang === 'zh' ? '中' : 'EN'}
-                </button>
-            </div>
-
-            {/* Center Content */}
-            <div className="flex-1 flex flex-col items-center justify-center px-4 pointer-events-auto text-center -mt-20">
-                
-                {/* Title Section */}
-                <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 1 }}
-                    className="mb-12"
-                >
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-md shadow-sm mb-6"
-                         style={{ 
-                             borderColor: isNight ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                             background: isNight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)' 
-                         }}
-                    >
-                        <SparklesIcon className="w-4 h-4 text-purple-400" />
-                        <span className={`text-sm font-medium ${isNight ? 'text-gray-200' : 'text-gray-800'}`}>{dict.badge}</span>
-                    </div>
-
-                    <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 drop-shadow-sm">
-                        <span className={`block ${isNight ? 'text-white' : 'text-gray-900'}`}>{dict.h1a}</span>
-                        <span className="block bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent pb-2">{dict.h1b}</span>
-                    </h1>
-
-                    <p className={`text-lg md:text-xl font-light max-w-2xl mx-auto leading-relaxed ${isNight ? 'text-gray-400' : 'text-gray-700'}`}>
-                        {dict.sub.split('\n')[0]}<br className="hidden md:block" />{dict.sub.split('\n')[1]}
-                    </p>
-                </motion.div>
-
-                {/* Input Bar */}
-                <motion.div 
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.2, duration: 0.5 }}
-                    className="w-full max-w-xl flex flex-col items-center gap-4"
-                >
-                    <div 
-                        className="relative w-full flex items-center gap-2 p-2 rounded-full shadow-2xl border transition-all duration-300 backdrop-blur-xl"
-                        style={{
-                            background: isNight ? 'rgba(30, 30, 30, 0.6)' : 'rgba(255, 255, 255, 0.7)',
-                            borderColor: isNight ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
-                        }}
-                    >
-                        {/* Upload Button */}
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden transition-colors"
-                            style={{
-                                background: selectedFile ? '#333' : (isNight ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'),
-                                color: isNight ? '#AAA' : '#666'
-                            }}
-                        >
-                            {filePreview ? (
-                                <img src={filePreview} alt="Preview" className="w-full h-full object-cover" />
-                            ) : (
-                                <PhotoIcon className="w-5 h-5" />
-                            )}
-                        </button>
-
-                        {/* Text Input */}
-                        <input 
-                            type="text" 
-                            value={promptText}
-                            onChange={(e) => setPromptText(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                            placeholder={dict.describePlaceholder}
-                            className="flex-1 bg-transparent border-none outline-none text-sm px-2"
-                            style={{
-                                color: isNight ? '#FFF' : '#111',
-                            }}
-                        />
-
-                        {/* Send Button */}
-                        <button 
-                            onClick={handleSubmit}
-                            disabled={!selectedFile && !promptText}
-                            className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center transition-transform hover:scale-105 shadow-md ${
-                                selectedFile ? 'bg-white text-black' : (isNight ? 'bg-zinc-700 text-zinc-400' : 'bg-white text-gray-400')
-                            }`}
-                        >
-                            <PaperAirplaneIcon className="w-5 h-5 -ml-0.5" />
-                        </button>
-                    </div>
-
-                    {/* Helper */}
-                    <div className={`flex flex-col md:flex-row items-center gap-2 text-xs ${isNight ? 'text-gray-500' : 'text-gray-600'}`}>
-                        <span className="font-medium px-2 py-0.5 rounded bg-black/10 dark:bg-white/10">{dict.example}</span>
-                        <span className="cursor-pointer hover:text-blue-500 transition-colors" onClick={() => setPromptText(dict.examplePrompt)}>
-                            {dict.examplePrompt}
-                        </span>
-                    </div>
-
-                </motion.div>
-            </div>
-            
-            <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} accept="image/*,.heic,.heif,.dng,.cr2,.cr3,.nef,.arw,.orf,.rw2,.raf,.sr2" />
-        </div>
     </div>
   );
 };

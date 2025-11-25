@@ -3,35 +3,38 @@ import { AnalysisResponse, PlanItem } from "../types";
 
 // --- MOCK DATA ---
 
-const MOCK_ANALYSIS: AnalysisResponse = {
-  analysis: [
+const MOCK_ITEMS: PlanItem[] = [
     {
       id: "1",
-      problem: "Mock Issue: Poor Lighting",
+      problem: "Poor Lighting Detected",
       solution: "Adjust exposure and contrast",
       engine: "Adjustment",
-      type: "adjustment"
+      type: "adjustment",
+      checked: true
     },
     {
       id: "2",
-      problem: "Mock Issue: Distracting Elements",
-      solution: "Remove background clutter",
+      problem: "Distracting Background",
+      solution: "Remove clutter & blur depth",
       engine: "Generative",
-      type: "generative"
+      type: "generative",
+      checked: true
     },
     {
       id: "3",
-      problem: "Mock Issue: Color Balance",
-      solution: "Correct skin tones",
+      problem: "Skin Tone Imbalance",
+      solution: "Correct warmth & tint",
       engine: "Adjustment",
-      type: "adjustment"
+      type: "adjustment",
+      checked: true
     },
     {
       id: "filter_opt",
-      problem: "Filter Suggestions",
-      solution: "Apply Creative Style",
+      problem: "Creative Styles",
+      solution: "Apply Artistic Filter",
       engine: "Filter",
       type: "adjustment",
+      checked: false, // Default unchecked for filters
       options: [
         "Cinematic Warm",
         "Cool Breeze",
@@ -41,8 +44,7 @@ const MOCK_ANALYSIS: AnalysisResponse = {
         "B&W Noir"
       ]
     }
-  ]
-};
+];
 
 // --- API Key Management (Mocked) ---
 export const checkAndRequestApiKey = async (): Promise<boolean> => {
@@ -56,14 +58,26 @@ export const urlToBlob = async (url: string): Promise<Blob> => {
   return await res.blob();
 };
 
-// --- Analysis Service (Mocked) ---
-export const analyzeImage = async (file: File): Promise<AnalysisResponse | null> => {
-  console.log("Mock: Analyzing image...");
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(MOCK_ANALYSIS);
-    }, 1500); // Simulate 1.5s delay
-  });
+// --- Analysis Service (Streaming Mock) ---
+// Now accepts a callback to stream items one by one
+export const analyzeImage = async (
+  file: File, 
+  onPartialResult: (item: PlanItem) => void
+): Promise<void> => {
+  console.log("Mock: Analyzing image (Streaming)...");
+  
+  // Simulate initial "upload and vision processing" delay
+  await new Promise(r => setTimeout(r, 800));
+
+  // Stream items one by one with random delays
+  for (const item of MOCK_ITEMS) {
+      await new Promise(r => setTimeout(r, Math.random() * 800 + 400));
+      // Clone to avoid reference issues
+      onPartialResult({ ...item });
+  }
+
+  // Simulate final wrap up
+  await new Promise(r => setTimeout(r, 500));
 };
 
 // --- Editing Service (Mocked) ---
