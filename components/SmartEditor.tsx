@@ -319,8 +319,18 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       const prompt = userInput.trim() || "Apply edits based on visual annotations.";
       setIsProcessing(true);
       
+      // Visual feedback: if we are in initial state, show 'executing' status
+      const isInitial = status === 'ready' || status === 'analyzing';
+      if (isInitial) setStatus('executing');
+
       try {
           const baseImageBlob = await urlToBlob(currentDisplayImage);
+          
+          // If this is the FIRST edit (from Ready state), we should include the selected Plan Items
+          // because they haven't been applied yet.
+          // If this is a SUBSEQUENT edit (from Completed state), the baseImage already has Plan Items applied,
+          // so we don't apply them again.
+          const activeSteps = isInitial ? planItems.filter(i => i.checked) : [];
           
           const maskStep: PlanItem = {
             id: `mask_${Date.now()}`,
@@ -333,7 +343,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           };
           setPlanItems(prev => [...prev, maskStep]);
           
-          const resultUrl = await editImage(baseImageBlob, [], prompt, '1K', currentMaskBlob);
+          const resultUrl = await editImage(baseImageBlob, activeSteps, prompt, '1K', currentMaskBlob);
           
           if (resultUrl) {
               addToHistory(resultUrl);
@@ -341,10 +351,12 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
               setIsMaskingMode(false);
               setCurrentMaskBlob(null);
               setUserInput('');
+              setStatus('completed'); // Ensure we land in completed state
           }
       } catch (e) {
           console.error(e);
           alert("Masked edit failed.");
+          if (isInitial) setStatus('ready'); // Revert status if failed
       } finally {
           setIsProcessing(false);
       }
@@ -666,22 +678,32 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         <div className="p-4 border-t border-gray-100 bg-white pb-8 z-20">
           {(status === 'ready' || status === 'analyzing') && (
             <div className="space-y-3">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder={dict.addCustom}
-                  className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleUserSubmit()}
-                />
-                <button
-                  onClick={handleUserSubmit}
-                  className="absolute right-2 top-1.5 p-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-600 transition-colors"
-                >
-                  <ArrowUpTrayIcon className="w-4 h-4 rotate-90" />
-                </button>
+              <div className="flex gap-2 items-center">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder={dict.addCustom}
+                      className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                      value={userInput}
+                      onChange={(e) => setUserInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleUserSubmit()}
+                    />
+                    <button
+                      onClick={handleUserSubmit}
+                      className="absolute right-2 top-1.5 p-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-600 transition-colors"
+                    >
+                      <ArrowUpTrayIcon className="w-4 h-4 rotate-90" />
+                    </button>
+                  </div>
+                   <button
+                    onClick={startMasking}
+                    className="p-3 bg-white border border-gray-200 rounded-xl text-gray-500 hover:text-purple-600 hover:border-purple-300 hover:shadow-md transition-all"
+                    title={dict.annotateGuide}
+                  >
+                    <PaintBrushIcon className="w-5 h-5" />
+                  </button>
               </div>
+              
               <button
                 onClick={() => executeMagic()}
                 disabled={

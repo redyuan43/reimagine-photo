@@ -75,6 +75,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
     let backgroundObjects: any[] = [];
     let flyingObjects: any[] = [];
     let particles: any[] = [];
+    
+    // Track previous theme to detect switch instantly in loop
+    let lastIsNight = isNightRef.current;
 
     // --- CLASSES ---
 
@@ -370,6 +373,18 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
     const animate = () => {
         ctx.clearRect(0, 0, width, height);
+
+        // --- THEME SWITCH CLEANUP ---
+        // If theme changed since last frame, clear everything instantly to prevent artifacts
+        if (isNightRef.current !== lastIsNight) {
+            flyingObjects = [];
+            particles = [];
+            backgroundObjects = [];
+            // Regenerate background immediately if switching to night
+            if (isNightRef.current) createBackground();
+            lastIsNight = isNightRef.current;
+        }
+        // ----------------------------
 
         const gradient = ctx.createRadialGradient(width/2, height, 0, width/2, height/2, width);
         if (isNightRef.current) {
