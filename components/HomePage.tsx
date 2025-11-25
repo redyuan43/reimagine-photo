@@ -10,12 +10,21 @@ interface HomePageProps {
 }
 
 // Generate stable rain systems config
-const generateRainSystems = () => Array.from({ length: 60 }).map(() => ({
+const generateRainSystems = () => Array.from({ length: 25 }).map(() => ({
   left: Math.random() * 100,
   depth: Math.random() * 15,
-  delay: -Math.random() * 10, // Negative delay = Start in progress
-  duration: 1.2 + Math.random() * 0.8,
+  delay: -Math.random() * 10,
+  duration: Math.random() < 0.5 ? (0.8 + Math.random() * 0.7) : (2.5 + Math.random() * 1.5), // 极快或极慢
   scale: 0.5 + Math.random() * 0.5
+}));
+
+// Generate sparkles for badge
+const generateBadgeSparkles = () => Array.from({ length: 12 }).map(() => ({
+  left: Math.random() * 100,
+  top: Math.random() * 100,
+  delay: Math.random() * 3,
+  duration: 1.5 + Math.random() * 1.5,
+  size: 8 + Math.random() * 8
 }));
 
 export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) => {
@@ -36,12 +45,12 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
   
   // Memoize rain systems at the top level so they are identical across renders/layers
   const rainSystems = useMemo(() => generateRainSystems(), []);
+  const badgeSparkles = useMemo(() => generateBadgeSparkles(), []);
 
   // Translation Dictionary
   const t = useMemo(() => ({
     en: {
-      badge: 'Professional Studio',
-      h1a: 'Reimagine Photos',
+      badge: 'LUMINA-AI',
       h1b: 'With Intelligent Tech',
       sub: 'Experience next-generation photo retouching with professional models.\n4K Upscaling. High-Fidelity Editing. Instant Magic.',
       dragTip: 'Release to Magic Edit',
@@ -51,10 +60,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
       supports: 'Supports JPG, PNG, WEBP, RAW'
     },
     zh: {
-      badge: '专业工作室',
-      h1a: '重想照片',
+      badge: '流光 AI',
       h1b: '由智能科技加持',
-      sub: '使用专业模型体验下一代照片润饰。\n4K超分、高清编辑、即时魔法。',
+      sub: '您的专属修图大师，所想即所得 \n4K超分、高清编辑、即时魔法。',
       dragTip: '松开以魔法编辑',
       describePlaceholder: '描述你的想法...',
       example: '示例',
@@ -233,12 +241,50 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
             animate={animAnimate}
             transition={{ duration: 0.8, ease: 'easeOut' }}
         >
-            <motion.div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-md shadow-sm mb-8 transition-colors duration-500 ${isDarkTheme ? 'bg-zinc-800/60 border-zinc-700' : 'bg-white/60 border-white/60'}`} whileHover={{ scale: 1.05 }}>
-                <SparklesIcon className="w-4 h-4 text-purple-500" />
-                <span className="text-sm font-medium bg-gradient-to-r from-purple-500 to-blue-500 bg-clip-text text-transparent">{dict.badge}</span>
-            </motion.div>
+            <div className="relative inline-block mb-8">
+                {/* Sparkle Stars */}
+                {badgeSparkles.map((sparkle, idx) => (
+                  <motion.div
+                    key={`sparkle-${idx}`}
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: `${sparkle.left}%`,
+                      top: `${sparkle.top}%`,
+                      width: `${sparkle.size}px`,
+                      height: `${sparkle.size}px`,
+                      filter: 'drop-shadow(0 0 6px rgba(255, 215, 0, 0.9)) drop-shadow(0 0 12px rgba(255, 215, 0, 0.6))'
+                    }}
+                    animate={{
+                      opacity: [0, 1, 1, 0],
+                      scale: [0, 1.3, 1, 0],
+                      rotate: [0, 180, 360]
+                    }}
+                    transition={{
+                      duration: sparkle.duration,
+                      delay: sparkle.delay,
+                      repeat: Infinity,
+                      repeatDelay: 0.5,
+                      ease: 'easeInOut'
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="url(#gold-gradient-${idx})" />
+                      <defs>
+                        <linearGradient id="gold-gradient-${idx}" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                          <stop offset="0%" stopColor="#FFD700" />
+                          <stop offset="50%" stopColor="#FFA500" />
+                          <stop offset="100%" stopColor="#FFD700" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </motion.div>
+                ))}
+                <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-500 to-blue-500 bg-clip-text text-transparent relative z-10">
+                  {dict.badge}
+                </h2>
+            </div>
 
-            <h1 className="text-6xl md:text-8xl font-bold mb-8 tracking-tighter leading-tight drop-shadow-sm">
+            <h1 className="text-5xl md:text-6xl font-bold mb-8 tracking-tighter leading-tight drop-shadow-sm">
                 <span className="block">{dict.h1a}</span>
                 <span className="block bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent pb-2">{dict.h1b}</span>
             </h1>
@@ -330,13 +376,58 @@ const RainOverlay: React.FC<RainOverlayProps> = ({ dark, startTime, systems }) =
   const syncOffset = useMemo(() => { const mountTime = Date.now(); return (mountTime - startTime) / 1000; }, [startTime]);
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-      <style>{`@keyframes dropFall { 0% { transform: translateY(-120vh); opacity: 0; } 5% { opacity: ${dark ? 0.3 : 0.6}; } 70% { transform: translateY(0); opacity: ${dark ? 0.3 : 0.6}; } 71% { opacity: 0; } 100% { transform: translateY(0); opacity: 0; } } @keyframes splashPop { 0% { opacity: 0; transform: scale(0) rotateX(70deg); } 70% { opacity: 0; transform: scale(0) rotateX(70deg); } 71% { opacity: 1; transform: scale(0.5) rotateX(70deg); } 90% { opacity: 0; transform: scale(2) rotateX(70deg); } 100% { opacity: 0; transform: scale(2) rotateX(70deg); } }`}</style>
+      <style>{`
+        @keyframes dropFall { 
+          0% { transform: translateY(-120vh); opacity: 0; } 
+          5% { opacity: ${dark ? 0.3 : 0.6}; } 
+          100% { transform: translateY(0); opacity: ${dark ? 0.3 : 0.6}; } 
+        } 
+        @keyframes sparkBurst { 
+          0% { opacity: 0; transform: translate(0, 0) scale(0); } 
+          99% { opacity: 0; transform: translate(0, 0) scale(0); } 
+          99.5% { opacity: 1; transform: translate(0, 0) scale(1); } 
+          100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); } 
+        }
+      `}</style>
       {systems.map((sys, idx) => {
          const effectiveDelay = sys.delay - syncOffset;
+         // Generate 12 particles for bigger burst
+         const particles = Array.from({ length: 12 }).map((_, i) => {
+           const angle = (i * 30) * Math.PI / 180; // 30° intervals
+           const distance = 40 + Math.random() * 35;
+           return {
+             tx: Math.cos(angle) * distance,
+             ty: Math.sin(angle) * distance - 25, // Strong upward burst
+             size: 4 + Math.random() * 5,
+             delay: i * 0.01
+           };
+         });
+         
          return (
-            <div key={`rain-${idx}`} style={{ position: 'absolute', left: `${sys.left}%`, bottom: `${sys.depth}%`, width: '0', height: '0', zIndex: Math.floor(sys.depth), transform: `scale(${sys.scale})` }}>
-                <div style={{ position: 'absolute', left: '0', bottom: '0', width: '1px', height: '15vh', background: `linear-gradient(to bottom, transparent, rgba(${rgb}, 0.5))`, animation: `dropFall ${sys.duration}s linear infinite`, animationDelay: `${effectiveDelay}s` }} />
-                <div style={{ position: 'absolute', left: '-15px', bottom: '-10px', width: '30px', height: '30px', borderRadius: '50%', border: `2px solid rgba(${rgb}, 0.3)`, boxShadow: `0 0 0 4px rgba(${rgb}, 0.1)`, animation: `splashPop ${sys.duration}s ease-out infinite`, animationDelay: `${effectiveDelay}s` }} />
+            <div key={`rain-${idx}`} style={{ position: 'absolute', left: `${sys.left}%`, bottom: '0', width: '0', height: '0', zIndex: Math.floor(sys.depth), transform: `scale(${sys.scale})` }}>
+                {/* Rain Drop - falls to bottom */}
+                <div style={{ position: 'absolute', left: '0', bottom: '0', width: '2px', height: '20vh', background: `linear-gradient(to bottom, transparent, rgba(${rgb}, 0.7))`, animation: `dropFall ${sys.duration}s linear infinite`, animationDelay: `${effectiveDelay}s`, transformOrigin: 'bottom' }} />
+                
+                {/* Particle Sparks - only at bottom */}
+                {particles.map((particle, pIdx) => (
+                  <div 
+                    key={`particle-${pIdx}`}
+                    style={{ 
+                      position: 'absolute', 
+                      left: '0', 
+                      bottom: '0', 
+                      width: `${particle.size}px`, 
+                      height: `${particle.size}px`,
+                      borderRadius: '50%',
+                      background: `radial-gradient(circle, rgba(${rgb}, 1), rgba(${rgb}, 0.6))`,
+                      boxShadow: `0 0 6px rgba(${rgb}, 1), 0 0 12px rgba(${rgb}, 0.6)`,
+                      '--tx': `${particle.tx}px`,
+                      '--ty': `${particle.ty}px`,
+                      animation: `sparkBurst ${sys.duration}s ease-out infinite`,
+                      animationDelay: `${effectiveDelay + particle.delay}s`
+                    } as React.CSSProperties}
+                  />
+                ))}
             </div>
          );
       })}
