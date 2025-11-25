@@ -495,24 +495,10 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           </div>
         )}
 
-        {/* --- Analysis Scanner (Subtle) --- */}
+        {/* --- Analysis Scanner (Replaced with DNA) --- */}
         <AnimatePresence>
           {status === 'analyzing' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-20 pointer-events-none"
-            >
-              <motion.div
-                className="absolute left-0 right-0 z-20"
-                initial={{ top: '-10%' }}
-                animate={{ top: '110%' }}
-                transition={{ duration: 2.0, ease: 'linear', repeat: Infinity }}
-              >
-                <div className="h-1 w-full bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.8)]"></div>
-              </motion.div>
-            </motion.div>
+            <DNALoader scanning text={dict.analyzing} />
           )}
         </AnimatePresence>
 

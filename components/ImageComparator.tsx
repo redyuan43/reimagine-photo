@@ -16,27 +16,61 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
   const [width, setWidth] = useState(0);
   const x = useMotionValue(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
+  // Initialize width and position
   useEffect(() => {
     if (containerRef.current) {
       const w = containerRef.current.offsetWidth;
       setWidth(w);
-      x.set(enableSlider ? w / 2 : 0);
+      // Only set initial position if it hasn't been moved yet
+      if (x.get() === 0 && w > 0) {
+        x.set(enableSlider ? w / 2 : 0);
+      }
     }
-  }, [x, enableSlider]);
+  }, [enableSlider, x]);
+
+  // Handle window resize to keep width updated
+  useEffect(() => {
+    const handleResize = () => {
+      if (containerRef.current) {
+        setWidth(containerRef.current.offsetWidth);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Handle Drag Events
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!containerRef.current) return;
+      
+      const rect = containerRef.current.getBoundingClientRect();
+      // Calculate X relative to container, clamped within bounds
+      const newX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+      x.set(newX);
+    };
+
+    const handlePointerUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [isDragging, x]);
 
   return (
     <div
       ref={containerRef}
-      className={`relative w-full h-full max-w-4xl max-h-[80vh] select-none group ${
-        enableSlider ? 'cursor-ew-resize' : ''
-      }`}
-      onPointerMove={(e) => {
-        if (!enableSlider || !containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        const newX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-        x.set(newX);
-      }}
+      className="relative w-full h-full max-w-4xl max-h-[80vh] select-none group"
     >
       {/* Bottom Image (Modified) */}
       {modifiedImage && (
@@ -47,7 +81,7 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
         />
       )}
       {enableSlider && (
-        <div className="absolute top-4 right-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-white text-xs font-medium border border-white/20">
+        <div className="absolute top-4 right-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-white text-xs font-medium border border-white/20 pointer-events-none">
           After
         </div>
       )}
@@ -69,7 +103,7 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
           />
         )}
         {enableSlider && (
-          <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-white text-xs font-medium border border-white/20">
+          <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-white text-xs font-medium border border-white/20 pointer-events-none">
             Before
           </div>
         )}
@@ -78,11 +112,17 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
       {/* Slider Handle */}
       {enableSlider && (
         <motion.div
-          className="absolute top-0 bottom-0 w-0.5 bg-white cursor-ew-resize shadow-[0_0_10px_rgba(0,0,0,0.3)] z-10"
+          className="absolute top-0 bottom-0 w-0.5 bg-white cursor-ew-resize shadow-[0_0_10px_rgba(0,0,0,0.3)] z-10 touch-none"
           style={{ x }}
+          onPointerDown={(e) => {
+            setIsDragging(true);
+            e.preventDefault(); // Prevent text selection or default touch actions
+            e.stopPropagation();
+          }}
         >
-          <div className="absolute top-1/2 -left-4 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center transform -translate-y-1/2">
-            <div className="flex gap-0.5">
+          {/* Handle Icon */}
+          <div className="absolute top-1/2 -left-4 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center transform -translate-y-1/2 cursor-ew-resize hover:scale-110 transition-transform">
+            <div className="flex gap-0.5 pointer-events-none">
               <ChevronDoubleRightIcon className="w-4 h-4 text-zinc-400 rotate-180" />
               <ChevronDoubleRightIcon className="w-4 h-4 text-zinc-400" />
             </div>

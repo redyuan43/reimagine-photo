@@ -1,26 +1,35 @@
+
 import React from 'react';
 import { motion } from 'framer-motion';
 
 interface DNALoaderProps {
   embedded?: boolean;
+  scanning?: boolean;
   text?: string;
 }
 
 export const DNALoader: React.FC<DNALoaderProps> = ({ 
   embedded = false, 
+  scanning = false,
   text = "Initializing Core" 
 }) => {
   // Generate particles for strands
   const particles = Array.from({ length: 15 });
 
+  // Determine background class based on mode
+  // Scanning: Frosted glass overlay (matches embedded mode for consistency)
+  // Embedded: Darker overlay for processing blocks
+  // Default: Full screen black
+  const bgClass = scanning
+    ? 'absolute inset-0 z-20 bg-black/80 backdrop-blur-md'
+    : embedded
+      ? 'absolute inset-0 z-50 bg-black/80 backdrop-blur-md'
+      : 'fixed inset-0 z-[100] bg-[#0a0a0c]';
+
   return (
     <motion.div
-      className={`flex flex-col items-center justify-center ${
-        embedded 
-          ? 'absolute inset-0 z-50 bg-black/80 backdrop-blur-md' 
-          : 'fixed inset-0 z-[100] bg-[#0a0a0c]'
-      }`}
-      initial={embedded ? { opacity: 0 } : undefined}
+      className={`flex flex-col items-center justify-center ${bgClass}`}
+      initial={embedded || scanning ? { opacity: 0 } : undefined}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.5, ease: "easeInOut" } }}
     >
@@ -70,7 +79,7 @@ export const DNALoader: React.FC<DNALoaderProps> = ({
       </div>
       
       <motion.p 
-        className="mt-8 text-zinc-400 text-sm font-medium tracking-[0.2em] uppercase text-center px-4"
+        className="mt-8 text-zinc-400 text-sm font-medium tracking-[0.2em] uppercase text-center px-4 drop-shadow-md"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
