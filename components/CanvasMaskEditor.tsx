@@ -1,5 +1,5 @@
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { 
   PencilIcon, 
   StopIcon, 
@@ -21,6 +21,7 @@ interface CanvasMaskEditorProps {
   onMaskGenerated: (maskBlob: Blob) => void;
   onCancel: () => void;
   onSubmit: () => void;
+  lang: 'zh' | 'en';
 }
 
 type Tool = 'brush' | 'rect' | 'arrow' | 'text' | 'comment' | 'pan';
@@ -43,7 +44,8 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   imageSrc,
   onMaskGenerated,
   onCancel,
-  onSubmit
+  onSubmit,
+  lang
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,6 +88,37 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
 
   // Color Picker Internal State
   const [rgb, setRgb] = useState({ r: 255, g: 64, b: 129 });
+
+  // Translations
+  const t = useMemo(() => ({
+      en: {
+          comment: 'Comment (Box + Text)',
+          arrow: 'Arrow',
+          rect: 'Rectangle',
+          text: 'Text',
+          sketch: 'Sketch',
+          undo: 'Undo',
+          clear: 'Clear',
+          addToChat: '+ Add to chat',
+          annotateMode: 'Annotate Mode • Ctrl+Wheel to Zoom',
+          addComment: 'Add a comment...',
+          addText: 'Add text...',
+      },
+      zh: {
+          comment: '评论 (选框 + 文本)',
+          arrow: '箭头',
+          rect: '矩形',
+          text: '文本',
+          sketch: '涂鸦',
+          undo: '撤销',
+          clear: '清除',
+          addToChat: '+ 添加到对话',
+          annotateMode: '标注模式 • Ctrl+滚轮缩放',
+          addComment: '添加评论...',
+          addText: '添加文本...',
+      }
+  }), []);
+  const dict = t[lang];
 
   useEffect(() => {
       setRgb(hexToRgb(color));
@@ -471,7 +504,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
                         value={inputValue}
                         onChange={e => setInputValue(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && commitAnnotation()}
-                        placeholder={pendingAnnotation.type === 'comment' ? "Add a comment..." : "Add text..."}
+                        placeholder={pendingAnnotation.type === 'comment' ? dict.addComment : dict.addText}
                         className="bg-transparent border-none outline-none text-white text-sm px-3 py-1 w-48 placeholder-zinc-500"
                     />
                     <button 
@@ -509,7 +542,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button
                 onClick={() => setTool('comment')}
                 className={`p-2 rounded-lg transition-all ${tool === 'comment' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                title="Comment (Box + Text)"
+                title={dict.comment}
               >
                   <ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5" />
               </button>
@@ -517,7 +550,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button
                 onClick={() => setTool('arrow')}
                 className={`p-2 rounded-lg transition-all ${tool === 'arrow' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                title="Arrow"
+                title={dict.arrow}
               >
                   <ArrowLongLeftIcon className="w-5 h-5" />
               </button>
@@ -525,7 +558,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button
                 onClick={() => setTool('rect')}
                 className={`p-2 rounded-lg transition-all ${tool === 'rect' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                title="Rectangle"
+                title={dict.rect}
               >
                   <StopIcon className="w-5 h-5" />
               </button>
@@ -533,7 +566,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button
                 onClick={() => setTool('text')}
                 className={`p-2 rounded-lg transition-all ${tool === 'text' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                title="Text"
+                title={dict.text}
               >
                   <HashtagIcon className="w-5 h-5" />
               </button>
@@ -541,7 +574,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button
                 onClick={() => setTool('brush')}
                 className={`p-2 rounded-lg transition-all ${tool === 'brush' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                title="Sketch"
+                title={dict.sketch}
               >
                   <PencilIcon className="w-5 h-5" />
               </button>
@@ -606,6 +639,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
                 onClick={undo} 
                 disabled={historyStep <= 0} 
                 className="p-2 text-zinc-400 hover:text-white disabled:opacity-20 transition-colors"
+                title={dict.undo}
               >
                   <ArrowUturnLeftIcon className="w-5 h-5" />
               </button>
@@ -613,6 +647,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
               <button 
                 onClick={clearCanvas} 
                 className="p-2 text-zinc-400 hover:text-white transition-colors"
+                title={dict.clear}
               >
                   <TrashIcon className="w-5 h-5" />
               </button>
@@ -622,7 +657,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
                 disabled={!hasChanges}
                 className="ml-1 px-4 py-1.5 bg-[#333] hover:bg-[#444] border border-white/10 rounded-full text-white text-xs font-medium flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                  + Add to chat
+                  {dict.addToChat}
               </button>
 
               <button onClick={onCancel} className="p-2 ml-1 text-zinc-400 hover:text-white">
@@ -631,7 +666,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
           </div>
           
           <div className="text-center mt-3 text-[10px] text-zinc-500 font-medium tracking-widest uppercase opacity-50">
-              Annotate Mode • Ctrl+Wheel to Zoom
+              {dict.annotateMode}
           </div>
       </div>
 

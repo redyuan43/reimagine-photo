@@ -1,3 +1,4 @@
+
 export interface PlanItem {
   id: string;
   problem: string;
@@ -6,6 +7,8 @@ export interface PlanItem {
   type: 'generative' | 'adjustment';
   checked: boolean;
   isCustom?: boolean;
+  selectedOption?: string;
+  options?: string[];
 }
 
 export interface AnalysisResponse {
@@ -15,6 +18,7 @@ export interface AnalysisResponse {
     solution: string;
     engine: string;
     type: 'generative' | 'adjustment';
+    options?: string[];
   }[];
 }
 
