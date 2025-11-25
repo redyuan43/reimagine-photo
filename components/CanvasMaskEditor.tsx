@@ -102,7 +102,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
           undo: 'Undo',
           clear: 'Clear',
           addToChat: '+ Add to chat',
-          annotateMode: 'Annotate Mode • Ctrl+Wheel to Zoom',
+          annotateMode: 'Annotate Mode • Wheel to Zoom',
           addComment: 'Add a comment...',
           addText: 'Add text...',
       },
@@ -116,7 +116,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
           undo: '撤销',
           clear: '清除',
           addToChat: '+ 添加到对话',
-          annotateMode: '标注模式 • Ctrl+滚轮缩放',
+          annotateMode: '标注模式 • 滚轮缩放',
           addComment: '添加评论...',
           addText: '添加文本...',
       }
@@ -435,19 +435,53 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   };
   
   const handleWheel = (e: React.WheelEvent) => {
-     if (e.ctrlKey || tool === 'pan') { // Allow wheel zoom without Ctrl if in Pan mode (optional, but standard behavior usually requires Ctrl or it scrolls)
-         // Stick to standard Ctrl+Wheel for zoom to avoid conflict with vertical scroll if applicable, 
-         // but here we are full screenish.
-     }
-     if (e.ctrlKey) {
-         e.preventDefault();
-         const delta = -e.deltaY * 0.001;
-         setScale(s => Math.min(Math.max(0.1, s + delta), 5));
-     }
+     if (!containerRef.current) return;
+     
+     // Stop propagation to prevent page scroll
+     e.stopPropagation();
+     
+     const rect = containerRef.current.getBoundingClientRect();
+     const mouseX = e.clientX - rect.left;
+     const mouseY = e.clientY - rect.top;
+
+     // Calculate point on content under mouse (Image Coordinates)
+     const pointX = (mouseX - offset.x) / scale;
+     const pointY = (mouseY - offset.y) / scale;
+
+     // Zoom sensitivity
+     const delta = -e.deltaY * 0.002;
+     const newScale = Math.min(Math.max(0.1, scale + delta), 5);
+
+     // Calculate new offset to keep point under mouse
+     // mouseX = newOffsetX + pointX * newScale
+     const newOffsetX = mouseX - pointX * newScale;
+     const newOffsetY = mouseY - pointY * newScale;
+
+     setScale(newScale);
+     setOffset({ x: newOffsetX, y: newOffsetY });
   };
 
-  const zoomIn = () => setScale(s => Math.min(s + 0.2, 5));
-  const zoomOut = () => setScale(s => Math.max(0.1, s - 0.2));
+  const zoomToCenter = (targetScale: number) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      
+      const pointX = (cx - offset.x) / scale;
+      const pointY = (cy - offset.y) / scale;
+      
+      const newScale = Math.min(Math.max(0.1, targetScale), 5);
+      
+      const newOffsetX = cx - pointX * newScale;
+      const newOffsetY = cy - pointY * newScale;
+      
+      setScale(newScale);
+      setOffset({ x: newOffsetX, y: newOffsetY });
+  };
+
+  const zoomIn = () => zoomToCenter(scale + 0.5);
+  const zoomOut = () => zoomToCenter(scale - 0.5);
+  
   const resetZoom = () => {
       if (canvasRef.current) fitToScreen(canvasRef.current.width, canvasRef.current.height);
   };
