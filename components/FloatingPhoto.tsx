@@ -1,6 +1,6 @@
 
-import React, { useMemo } from 'react';
-import { motion, useTransform, MotionValue, useMotionValue } from 'framer-motion';
+import React from 'react';
+import { motion, useTransform, MotionValue } from 'framer-motion';
 
 export type FloatingVariant = 'vertical' | 'circular' | 'figure8';
 
@@ -52,17 +52,12 @@ export const FloatingPhoto: React.FC<FloatingPhotoProps> = ({
   startTime = Date.now(),
   variant = 'vertical'
 }) => {
-  // Calculate sync offset once and memoize it
-  const syncDelay = useMemo(() => {
-    const timeSinceStart = (Date.now() - startTime) / 1000;
-    return delay - timeSinceStart;
-  }, [startTime, delay]);
+  // Calculate sync offset: (Now - Start) / 1000
+  // Negative delay makes the animation start "in the past" so it matches absolute time
+  const timeSinceStart = (Date.now() - startTime) / 1000;
+  const syncDelay = delay - timeSinceStart;
 
   const animName = `float-${variant}`;
-  
-  // Always call hooks unconditionally (React rules)
-  const parallaxXTransform = useTransform(parallax?.x ?? useMotionValue(0), (v) => parallax ? v * (parallax.factor as number) : 0);
-  const parallaxYTransform = useTransform(parallax?.y ?? useMotionValue(0), (v) => parallax ? v * (parallax.factor as number) : 0);
 
   return (
     <>
@@ -74,25 +69,28 @@ export const FloatingPhoto: React.FC<FloatingPhotoProps> = ({
       <style>{ANIMATION_STYLES}</style>
 
       <motion.div
-        className={`absolute ${size}`}
+        className={`absolute rounded-2xl shadow-2xl overflow-hidden border-4 border-white bg-white ${size}`}
         style={{
           left: initialPos.x,
           top: initialPos.y,
-          x: parallaxXTransform,
-          y: parallaxYTransform,
+          // Mouse Parallax (Framer Motion) handles interactive offset
+          x: parallax ? useTransform(parallax.x, (v) => v * parallax.factor) : 0,
+          y: parallax ? useTransform(parallax.y, (v) => v * parallax.factor) : 0,
           opacity: blur ? 0.6 : 0.9,
           filter: blur ? 'blur(2px)' : 'none',
           zIndex: blur ? 0 : 10,
+          rotate: rotation, // Static rotation base
         }}
       >
-        {/* Combined container with border and animation */}
+        {/* Inner Container handles the infinite loop (Time Synced CSS) */}
         <div 
-            className="w-full h-full relative rounded-2xl shadow-2xl overflow-hidden border-4 border-white bg-white"
+            className="w-full h-full relative"
             style={{
                 animation: `${animName} ${duration}s ease-in-out infinite`,
                 animationDelay: `${syncDelay}s`,
-                transform: `rotate(${rotation}deg) translateZ(0)`,
-                willChange: 'transform'
+                // Force hardware acceleration to prevent paint flashing
+                transform: 'translateZ(0)', 
+                willChange: 'transform' 
             }}
         >
             <img src={src} className="w-full h-full object-cover" alt="Floating decoration" draggable="false" />
