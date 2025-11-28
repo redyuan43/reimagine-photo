@@ -16,30 +16,30 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
   const [width, setWidth] = useState(0);
   const x = useMotionValue(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const widthRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Initialize width and position
+  // Observe container size to keep slider aligned when layout changes
   useEffect(() => {
-    if (containerRef.current) {
-      const w = containerRef.current.offsetWidth;
-      setWidth(w);
-      // Only set initial position if it hasn't been moved yet
-      if (x.get() === 0 && w > 0) {
-        x.set(enableSlider ? w / 2 : 0);
-      }
-    }
-  }, [enableSlider, x]);
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const rect = entries[0].contentRect;
+      const newW = Math.max(0, rect.width);
+      const prevW = widthRef.current;
+      widthRef.current = newW;
+      setWidth(newW);
+      // Preserve slider position as a percentage when width changes
+      const prevX = x.get();
+      const ratio = prevW > 0 ? prevX / prevW : 0.5;
+      const nextX = enableSlider ? Math.max(0, Math.min(newW, ratio * newW)) : 0;
+      x.set(nextX);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [enableSlider]);
 
-  // Handle window resize to keep width updated
-  useEffect(() => {
-    const handleResize = () => {
-      if (containerRef.current) {
-        setWidth(containerRef.current.offsetWidth);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // Clamp x while dragging within current bounds
 
   // Handle Drag Events
   useEffect(() => {
@@ -70,13 +70,13 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full max-w-4xl max-h-[80vh] select-none group"
+      className="relative w-full h-full select-none group bg-zinc-900"
     >
       {/* Bottom Image (Modified) */}
       {modifiedImage && (
         <img
           src={modifiedImage}
-          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           alt="Modified"
         />
       )}
@@ -98,7 +98,7 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
         {originalImage && (
           <img
             src={originalImage}
-            className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             alt="Original"
           />
         )}

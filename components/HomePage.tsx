@@ -571,11 +571,11 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
   };
 
   return (
-    <div className="relative w-full h-full overflow-hidden font-sans" style={{ backgroundColor: isNight ? COLOR_NIGHT : COLOR_DAY, transition: 'background-color 0.8s' }}>
+    <div className="relative overflow-hidden font-sans" style={{ backgroundColor: '#0b0b0c', transition: 'background-color 0.8s', minHeight: '100vh', width: '100vw' }}>
       
       {/* 0. Canvas Layers */}
-      <canvas ref={canvasRef} className="absolute inset-0 z-0 block" />
-      <div ref={transitionLayerRef} className="absolute inset-0 z-10 pointer-events-none opacity-0" />
+      <canvas ref={canvasRef} className="z-0 block" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
+      <div ref={transitionLayerRef} className="z-10 pointer-events-none opacity-0" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
 
       {/* 1. Theme Toggle */}
       <button 
@@ -600,7 +600,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
       {/* 2. Main UI Content (Overlay) */}
       <div 
-        className="absolute inset-0 z-30 flex flex-col items-center justify-center px-4"
+        className="z-30 px-4"
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
         onDragEnter={handleDragIn}
         onDragLeave={handleDragOut}
         onDragOver={handleDrag}
@@ -627,7 +628,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className={`w-full max-w-4xl text-center mb-10 transition-colors duration-700 ${isNight ? 'text-white' : 'text-zinc-800'}`}
+            className={`w-full max-w-4xl text-center mb-10 transition-colors duration-700 text-white`}
          >
              <span className="inline-block px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-bold tracking-wider mb-6 backdrop-blur-md">
                 {dict.badge}

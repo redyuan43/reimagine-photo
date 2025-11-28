@@ -58,6 +58,9 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   const [currentMaskBlob, setCurrentMaskBlob] = useState<Blob | null>(null);
   
   const listEndRef = useRef<HTMLDivElement>(null);
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const [leftPct, setLeftPct] = useState(42);
+  const [isResizing, setIsResizing] = useState(false);
 
   // Translations
   const t = useMemo(() => ({
@@ -183,6 +186,30 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       listEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [planItems.length, status]);
+
+
+  useEffect(() => {
+    const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!isResizing || !layoutRef.current) return;
+      const rect = layoutRef.current.getBoundingClientRect();
+      const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+      const x = clientX - rect.left;
+      const pct = clamp((x / rect.width) * 100, 28, 75);
+      setLeftPct(pct);
+    };
+    const onUp = () => setIsResizing(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove, { passive: false } as any);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove as any);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, [isResizing]);
 
   // --- History Helpers ---
   const addToHistory = (newImageUrl: string) => {
@@ -391,9 +418,23 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
 
   const filterItem = planItems.find(item => item.options && item.options.length > 0);
 
+  const getFilterStyle = (name: string): React.CSSProperties => {
+    const n = name.toLowerCase();
+    const s: string[] = [];
+    if (/exposure|brightness|亮度/.test(n)) s.push('brightness(1.15)');
+    if (/contrast|对比/.test(n)) s.push('contrast(1.15)');
+    if (/warm|温暖|tint/.test(n)) { s.push('sepia(0.2)'); s.push('saturate(1.1)'); s.push('hue-rotate(-8deg)'); }
+    if (/cool|冷|blue|蓝/.test(n)) { s.push('saturate(0.95)'); s.push('hue-rotate(18deg)'); }
+    if (/vibrance|saturation|饱和/.test(n)) s.push('saturate(1.4)');
+    if (/blur|模糊|depth/.test(n)) s.push('blur(2px)');
+    if (/bw|b&w|黑白|mono|monochrome|grayscale/.test(n)) s.push('grayscale(100%)');
+    if (!s.length) return { filter: 'contrast(1.05) saturate(1.05)' };
+    return { filter: s.join(' ') };
+  };
+
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#F5F5F7]">
-      <div className="w-full md:w-2/3 h-[50vh] md:h-screen relative bg-zinc-900 flex items-center justify-center overflow-hidden">
+    <div ref={layoutRef} className="bg-[#0b0b0c]" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'row', alignItems: 'stretch', userSelect: isResizing ? 'none' : 'auto' }}>
+      <div className="relative bg-zinc-900 flex items-center justify-center overflow-hidden" style={{ width: `${leftPct}%`, height: '100vh' }}>
         
         {/* --- Toolbar (Undo/Redo) --- */}
         {!isMaskingMode && status === 'completed' && (
@@ -485,11 +526,12 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                      onClick={() => handleFilterSelect(filterItem.id, opt)}
                      className={`relative group flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${filterItem.selectedOption === opt ? 'border-purple-500 scale-105' : 'border-transparent hover:border-white/50'}`}
                    >
-                      <img src={imagePreview || ''} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                      <img src={imagePreview || ''} style={getFilterStyle(opt)} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end justify-center p-1">
                           <span className="text-[10px] font-medium text-white text-center leading-tight line-clamp-2">{opt}</span>
                       </div>
-                   </button>
+                   </button
+                   >
                 ))}
              </div>
           </div>
@@ -519,17 +561,17 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         </AnimatePresence>
       </div>
 
-      {/* --- Right Panel: Controls --- */}
-      <div className="w-full md:w-1/3 h-[50vh] md:h-screen bg-white border-l border-gray-200 flex flex-col shadow-2xl z-10">
-        <div className="p-6 border-b border-gray-100 flex-shrink-0 bg-gray-50/50">
+      <div onMouseDown={() => setIsResizing(true)} onTouchStart={() => setIsResizing(true)} style={{ width: 10, cursor: 'col-resize', height: '100vh', background: 'transparent' }} />
+      <div className="bg-[#121212] border-l border-white/10 flex flex-col shadow-2xl z-10 text-white" style={{ width: `${100 - leftPct}%`, height: '100vh' }}>
+        <div className="p-6 border-b border-white/10 flex-shrink-0 bg-black/30">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-zinc-800 flex items-center gap-2">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <SparklesIcon className="w-5 h-5 text-purple-600" />
               {dict.smartAssistant}
             </h2>
             <button
               onClick={onReset}
-              className="text-xs text-gray-400 hover:text-gray-600 underline"
+              className="text-xs text-gray-300 hover:text-white underline"
             >
               {dict.newUpload}
             </button>
@@ -539,6 +581,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
             {/* Step List */}
             <div className="space-y-4">
+              <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
               <AnimatePresence>
                 {planItems.map((item, index) => {
                   const activeIndex = getActiveIndex(item.id);
@@ -550,7 +593,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                           <div 
                               key={item.id} 
                               onClick={() => (status === 'ready' || status === 'analyzing') && toggleItem(item.id)}
-                              className={`border border-transparent bg-gray-50 rounded-2xl p-4 transition-all relative group cursor-pointer opacity-60 hover:opacity-100 hover:bg-white hover:shadow-sm hover:border-gray-200`}
+                              className={`border border-white/10 bg-[#171717] rounded-2xl p-4 transition-all relative group cursor-pointer opacity-60 hover:opacity-100 hover:bg-[#1f1f1f] hover:shadow-sm`}
                           >
                               <div className="flex gap-3 items-center text-gray-400 group-hover:text-gray-600 transition-colors">
                                   <div className="flex-shrink-0"><ExclamationTriangleIcon className="w-5 h-5" /></div>
@@ -569,13 +612,16 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                       className={`group border rounded-2xl p-4 transition-all duration-300 relative overflow-hidden
                           ${
                             isProcessingThis
-                              ? 'bg-purple-50 border-purple-400 shadow-md ring-1 ring-purple-400/30 scale-[1.02]'
+                              ? 'bg-purple-500/10 border-purple-400 shadow-md ring-1 ring-purple-400/30 scale-[1.02]'
                               : isDone
-                              ? 'bg-green-50/40 border-green-200 shadow-sm'
-                              : 'bg-white border-gray-200'
+                              ? 'bg-green-500/10 border-green-400 shadow-sm'
+                              : 'bg-[#1a1a1a] border-white/10'
                           }
                       `}
                     >
+                      {status === 'analyzing' && (
+                        <div style={{ position:'absolute', inset:0, background:'linear-gradient(90deg, rgba(255,255,255,0), rgba(124,58,237,0.16), rgba(255,255,255,0))', transform:'translateX(-100%)', animation:'shimmer 1.8s linear infinite' }} />
+                      )}
                       <div className="relative z-10">
                         <div className="flex gap-3 mb-3">
                           <div className="mt-1 flex-shrink-0">
@@ -586,10 +632,10 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                             )}
                           </div>
                           <div>
-                            <h4 className={`text-xs font-bold uppercase tracking-wide mb-0.5 ${isDone ? 'text-green-600' : (item.isCustom ? 'text-purple-500' : 'text-red-500')}`}>
+                            <h4 className={`text-xs font-bold uppercase tracking-wide mb-0.5 ${isDone ? 'text-green-400' : (item.isCustom ? 'text-purple-400' : 'text-red-400')}`}>
                               {item.isCustom ? dict.userRequest : dict.issue}
                             </h4>
-                            <p className="text-sm text-gray-700 font-medium">
+                            <p className="text-sm text-gray-200 font-medium">
                               {item.problem}
                             </p>
                           </div>
@@ -597,13 +643,13 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                         
                         <div
                           onClick={() => (status === 'ready' || status === 'analyzing') && toggleItem(item.id)}
-                          className={`flex gap-3 items-start p-3 rounded-xl cursor-pointer transition-colors 
+                          className={`relative overflow-hidden flex gap-3 items-start p-3 rounded-xl cursor-pointer transition-colors 
                               ${
                                 isDone
-                                    ? 'bg-green-100 text-green-800'
+                                    ? 'bg-green-900/20 text-green-300'
                                     : isProcessingThis 
-                                      ? 'bg-purple-100 text-purple-900'
-                                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                                      ? 'bg-purple-900/20 text-purple-300'
+                                      : 'bg-[#181818] text-gray-300 hover:bg-[#202020]'
                               }
                           `}
                         >
@@ -623,10 +669,10 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                             )}
                           </div>
                           <div className="flex-1">
-                            <p className="text-sm font-semibold mb-1 flex items-center justify-between">
+                            <p className="text-sm font-semibold mb-1 flex items-center justify-between text-white">
                               {item.solution}
                               {isProcessingThis && (
-                                <span className="text-xs text-purple-600 font-bold animate-pulse">
+                                <span className="text-xs text-purple-400 font-bold animate-pulse">
                                   {dict.processingStep}
                                 </span>
                               )}
@@ -644,10 +690,10 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                   <motion.div 
                     initial={{ opacity: 0 }} 
                     animate={{ opacity: 1 }} 
-                    className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 bg-gray-50/50"
+                    className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-[#181818]"
                   >
-                      <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                      <span className="text-sm text-gray-500 font-medium animate-pulse">{dict.thinking}</span>
+                      <div className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-sm text-gray-300 font-medium animate-pulse">{dict.thinking}</span>
                   </motion.div>
               )}
               
@@ -661,7 +707,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
             </div>
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-white pb-8 z-20">
+        <div className="p-4 border-t border-white/10 bg-[#121212] pb-8 z-20">
           {(status === 'ready' || status === 'analyzing') && (
             <div className="space-y-3">
               <div className="flex gap-2 items-center">
@@ -669,21 +715,21 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                     <input
                       type="text"
                       placeholder={dict.addCustom}
-                      className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                      className="w-full pl-4 pr-12 py-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-sm text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
                       value={userInput}
                       onChange={(e) => setUserInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleUserSubmit()}
                     />
                     <button
                       onClick={handleUserSubmit}
-                      className="absolute right-2 top-1.5 p-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-600 transition-colors"
+                      className="absolute right-2 top-1.5 p-1.5 bg-[#2a2a2a] hover:bg-[#343434] rounded-lg text-gray-200 transition-colors"
                     >
                       <ArrowUpTrayIcon className="w-4 h-4 rotate-90" />
                     </button>
                   </div>
                    <button
                     onClick={startMasking}
-                    className="p-3 bg-white border border-gray-200 rounded-xl text-gray-500 hover:text-purple-600 hover:border-purple-300 hover:shadow-md transition-all"
+                    className="p-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-gray-300 hover:text-purple-400 hover:border-purple-300 hover:shadow-md transition-all"
                     title={dict.annotateGuide}
                   >
                     <PaintBrushIcon className="w-5 h-5" />
@@ -753,7 +799,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                     type="text"
                     placeholder={dict.placeholderEdit}
                     disabled={isProcessing}
-                    className="w-full pl-4 pr-12 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-500 outline-none shadow-sm focus:ring-2 focus:ring-green-500 transition-all"
+                    className="w-full pl-4 pr-12 py-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-sm text-gray-200 placeholder-gray-400 outline-none shadow-sm focus:ring-2 focus:ring-green-500 transition-all"
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleUserSubmit()}

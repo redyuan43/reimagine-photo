@@ -54,7 +54,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] font-sans overflow-hidden selection:bg-blue-200 selection:text-blue-900">
+    <div className="bg-[#0b0b0c] font-sans overflow-hidden selection:bg-blue-200 selection:text-blue-900" style={{ minHeight: '100vh' }}>
       <AnimatePresence mode="wait">
         {showIntro ? (
           <DNALoader key="loader" />

@@ -574,68 +574,68 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
 
       {/* --- Annanote Toolbar --- */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50">
-          <div className="flex items-center bg-[#262626] rounded-full px-2 py-1.5 shadow-2xl border border-white/10 gap-1">
+          <div className="flex items-center bg-[#262626] rounded-full px-1.5 py-1 shadow-2xl border border-white/10 gap-1" style={{ transform: 'scale(0.5)', transformOrigin: 'center' }}>
               
-              <div className="p-2 text-zinc-500 cursor-grab">
-                  <Squares2X2Icon className="w-5 h-5" />
+              <div className="p-1.5 text-zinc-500 cursor-grab">
+                  <Squares2X2Icon className="w-4 h-4" />
               </div>
 
               {/* Pan Tool */}
               <button
                 onClick={() => setTool('pan')}
-                className={`p-2 rounded-lg transition-all ${tool === 'pan' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                className={`p-1.5 rounded-lg transition-all ${tool === 'pan' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                 title={dict.pan}
               >
-                  <HandRaisedIcon className="w-5 h-5" />
+                  <HandRaisedIcon className="w-4 h-4" />
               </button>
 
-              <div className="w-px h-6 bg-white/10 mx-1"></div>
+              <div className="w-px h-5 bg-white/10 mx-1"></div>
 
               <button
                 onClick={() => setTool('comment')}
-                className={`p-2 rounded-lg transition-all ${tool === 'comment' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                className={`p-1.5 rounded-lg transition-all ${tool === 'comment' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                 title={dict.comment}
               >
-                  <ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5" />
+                  <ChatBubbleOvalLeftEllipsisIcon className="w-4 h-4" />
               </button>
 
               <button
                 onClick={() => setTool('arrow')}
-                className={`p-2 rounded-lg transition-all ${tool === 'arrow' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                className={`p-1.5 rounded-lg transition-all ${tool === 'arrow' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                 title={dict.arrow}
               >
-                  <ArrowLongLeftIcon className="w-5 h-5" />
+                  <ArrowLongLeftIcon className="w-4 h-4" />
               </button>
 
               <button
                 onClick={() => setTool('rect')}
-                className={`p-2 rounded-lg transition-all ${tool === 'rect' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                className={`p-1.5 rounded-lg transition-all ${tool === 'rect' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                 title={dict.rect}
               >
-                  <StopIcon className="w-5 h-5" />
+                  <StopIcon className="w-4 h-4" />
               </button>
 
               <button
                 onClick={() => setTool('text')}
-                className={`p-2 rounded-lg transition-all ${tool === 'text' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                className={`p-1.5 rounded-lg transition-all ${tool === 'text' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                 title={dict.text}
               >
-                  <HashtagIcon className="w-5 h-5" />
+                  <HashtagIcon className="w-4 h-4" />
               </button>
 
               <button
                 onClick={() => setTool('brush')}
-                className={`p-2 rounded-lg transition-all ${tool === 'brush' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                className={`p-1.5 rounded-lg transition-all ${tool === 'brush' ? 'bg-[#333] text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                 title={dict.sketch}
               >
-                  <PencilIcon className="w-5 h-5" />
+                  <PencilIcon className="w-4 h-4" />
               </button>
 
               {/* Color Picker */}
               <div className="relative mx-1">
                   <button 
                     onClick={() => setShowColorPicker(!showColorPicker)}
-                    className="w-6 h-6 rounded-full border border-white/20 flex items-center justify-center hover:scale-110 transition-transform"
+                    className="w-5 h-5 rounded-full border border-white/20 flex items-center justify-center hover:scale-110 transition-transform"
                     style={{ backgroundColor: color }}
                   />
                   
@@ -685,35 +685,35 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
                   )}
               </div>
 
-              <div className="w-px h-6 bg-white/10 mx-1"></div>
+              <div className="w-px h-5 bg-white/10 mx-1"></div>
 
               <button 
                 onClick={undo} 
                 disabled={historyStep <= 0} 
-                className="p-2 text-zinc-400 hover:text-white disabled:opacity-20 transition-colors"
+                className="p-1.5 text-zinc-400 hover:text-white disabled:opacity-20 transition-colors"
                 title={dict.undo}
               >
-                  <ArrowUturnLeftIcon className="w-5 h-5" />
+                  <ArrowUturnLeftIcon className="w-4 h-4" />
               </button>
               
               <button 
                 onClick={clearCanvas} 
-                className="p-2 text-zinc-400 hover:text-white transition-colors"
+                className="p-1.5 text-zinc-400 hover:text-white transition-colors"
                 title={dict.clear}
               >
-                  <TrashIcon className="w-5 h-5" />
+                  <TrashIcon className="w-4 h-4" />
               </button>
 
               <button 
                 onClick={() => hasChanges && onSubmit()}
                 disabled={!hasChanges}
-                className="ml-1 px-4 py-1.5 bg-[#333] hover:bg-[#444] border border-white/10 rounded-full text-white text-xs font-medium flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="ml-1 px-3 py-1 bg-[#333] hover:bg-[#444] border border-white/10 rounded-full text-white text-xs font-medium flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                   {dict.addToChat}
               </button>
 
-              <button onClick={onCancel} className="p-2 ml-1 text-zinc-400 hover:text-white">
-                  <XMarkIcon className="w-5 h-5" />
+              <button onClick={onCancel} className="p-1.5 ml-1 text-zinc-400 hover:text-white">
+                  <XMarkIcon className="w-4 h-4" />
               </button>
           </div>
           
