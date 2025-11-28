@@ -61,22 +61,32 @@ export const urlToBlob = async (url: string): Promise<Blob> => {
 // --- Analysis Service (Streaming Mock) ---
 // Now accepts a callback to stream items one by one
 export const analyzeImage = async (
-  file: File, 
+  file: File,
   onPartialResult: (item: PlanItem) => void
 ): Promise<void> => {
-  console.log("Mock: Analyzing image (Streaming)...");
-  
-  // Simulate initial "upload and vision processing" delay
-  await new Promise(r => setTimeout(r, 800));
-
-  // Stream items one by one with random delays
-  for (const item of MOCK_ITEMS) {
-      await new Promise(r => setTimeout(r, Math.random() * 800 + 400));
-      // Clone to avoid reference issues
-      onPartialResult({ ...item });
+  try {
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('prompt', '');
+    const res = await fetch('http://localhost:8000/analyze', { method: 'POST', body: fd });
+    if (res.ok) {
+      const data = await res.json() as { analysis?: PlanItem[] };
+      const items = data.analysis || [];
+      for (const it of items) {
+        await new Promise(r => setTimeout(r, 150));
+        onPartialResult(it);
+      }
+      return;
+    }
+  } catch (e) {
+    console.warn('Backend analyze failed, falling back to mock.', e);
   }
 
-  // Simulate final wrap up
+  await new Promise(r => setTimeout(r, 800));
+  for (const item of MOCK_ITEMS) {
+    await new Promise(r => setTimeout(r, Math.random() * 800 + 400));
+    onPartialResult({ ...item });
+  }
   await new Promise(r => setTimeout(r, 500));
 };
 
