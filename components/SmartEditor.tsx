@@ -61,6 +61,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   const layoutRef = useRef<HTMLDivElement>(null);
   const [leftPct, setLeftPct] = useState(42);
   const [isResizing, setIsResizing] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
 
   // Translations
   const t = useMemo(() => ({
@@ -160,7 +161,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       }
 
       // Start Streaming Analysis
-      await analyzeImage(imageFile, (newItem) => {
+      const s = await analyzeImage(imageFile, (newItem) => {
           if (isMounted) {
               setPlanItems(prev => {
                   // Avoid duplicates
@@ -169,6 +170,9 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
               });
           }
       });
+      if (isMounted && s) {
+        setSummaryText(s);
+      }
       
       if (isMounted) {
         setStatus('ready');
@@ -706,6 +710,19 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
               )}
             </div>
         </div>
+
+        {summaryText !== undefined && (
+          <div className="px-6 py-4 border-t border-white/10 bg-[#121212]">
+            <div className="max-w-none">
+              <h3 className="text-sm font-semibold text-white mb-2">总结</h3>
+              {summaryText ? (
+                <p className="text-sm text-gray-300 leading-relaxed">{summaryText}</p>
+              ) : (
+                <div className="h-16 rounded-lg bg-[#181818] border border-white/10" />
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="p-4 border-t border-white/10 bg-[#121212] pb-8 z-20">
           {(status === 'ready' || status === 'analyzing') && (

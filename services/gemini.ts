@@ -63,20 +63,20 @@ export const urlToBlob = async (url: string): Promise<Blob> => {
 export const analyzeImage = async (
   file: File,
   onPartialResult: (item: PlanItem) => void
-): Promise<void> => {
+): Promise<string | undefined> => {
   try {
     const fd = new FormData();
     fd.append('image', file);
     fd.append('prompt', '');
     const res = await fetch('http://localhost:8000/analyze', { method: 'POST', body: fd });
     if (res.ok) {
-      const data = await res.json() as { analysis?: PlanItem[] };
+      const data = await res.json() as { analysis?: PlanItem[], summary?: string };
       const items = data.analysis || [];
       for (const it of items) {
         await new Promise(r => setTimeout(r, 150));
         onPartialResult(it);
       }
-      return;
+      return data.summary || undefined;
     }
   } catch (e) {
     console.warn('Backend analyze failed, falling back to mock.', e);
@@ -88,6 +88,7 @@ export const analyzeImage = async (
     onPartialResult({ ...item });
   }
   await new Promise(r => setTimeout(r, 500));
+  return undefined;
 };
 
 // --- Editing Service (Mocked) ---
