@@ -70,7 +70,7 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full select-none group bg-zinc-900"
+      className="relative w-full h-full select-none group bg-[#0b0b0c]"
     >
       {/* Bottom Image (Modified) */}
       {modifiedImage && (

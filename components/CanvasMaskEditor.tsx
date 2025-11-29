@@ -511,7 +511,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-[#121212] overflow-hidden select-none group">
+    <div className="relative w-full h-full flex items-center justify-center bg-[#0b0b0c] overflow-hidden select-none group">
       
       {/* Viewport */}
       <div 

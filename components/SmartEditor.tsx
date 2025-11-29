@@ -482,7 +482,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
             )}
             {status === 'completed' && !isUpscaling && !isHighRes && (
                 <>
-                <CheckCircleIcon className="w-4 h-4 text-green-400" /> {dict.done}
+                <CheckCircleIcon className="w-4 h-4 text-amber-400" /> {dict.done}
                 </>
             )}
             {isUpscaling && (
@@ -618,7 +618,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                             isProcessingThis
                               ? 'bg-purple-900/10 border-purple-500/30 shadow-[0_0_20px_rgba(168,85,247,0.1)]'
                               : isDone
-                              ? 'bg-green-900/10 border-green-500/30'
+                              ? 'bg-amber-900/10 border-amber-500/30'
                               : 'bg-[#1a1a1a] border-white/5 hover:border-white/10'
                           }
                       `}
@@ -626,11 +626,11 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                       {/* Header Section */}
                       <div className="px-4 py-3 flex items-center gap-2.5 border-b border-white/5 bg-white/[0.02]">
                           {item.isCustom ? (
-                              <SparklesIcon className={`w-4 h-4 ${isDone ? 'text-green-400' : 'text-purple-400'}`} />
+                              <SparklesIcon className={`w-4 h-4 ${isDone ? 'text-amber-400' : 'text-purple-400'}`} />
                           ) : (
-                              <ExclamationTriangleIcon className={`w-4 h-4 ${isDone ? 'text-green-400' : 'text-amber-400'}`} />
+                              <ExclamationTriangleIcon className={`w-4 h-4 ${isDone ? 'text-amber-400' : 'text-amber-400'}`} />
                           )}
-                          <span className={`text-xs font-bold tracking-wider uppercase ${isDone ? 'text-green-400' : (item.isCustom ? 'text-purple-400' : 'text-amber-400')}`}>
+                          <span className={`text-xs font-bold tracking-wider uppercase ${isDone ? 'text-amber-400' : (item.isCustom ? 'text-purple-400' : 'text-amber-400')}`}>
                               {item.isCustom ? dict.userRequest : (item.category || dict.issue)}
                           </span>
                       </div>
@@ -663,7 +663,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                               className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all
                                     ${
                                       isDone
-                                        ? 'bg-green-500 text-black scale-110'
+                                        ? 'bg-amber-500 text-black scale-110'
                                         : isProcessingThis
                                           ? 'border-2 border-purple-500 border-t-transparent animate-spin'
                                           : item.checked
@@ -743,14 +743,14 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                     <input
                       type="text"
                       placeholder={dict.addCustom}
-                      className="w-full pl-4 pr-12 py-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-sm text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                      className="w-full pl-4 pr-12 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-amber-500 outline-none transition-all"
                       value={userInput}
                       onChange={(e) => setUserInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleUserSubmit()}
                     />
                     <button
                       onClick={handleUserSubmit}
-                      className="absolute right-2 top-1.5 p-1.5 bg-[#2a2a2a] hover:bg-[#343434] rounded-lg text-gray-200 transition-colors"
+                      className="absolute right-2 top-1.5 p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-gray-200 transition-colors"
                     >
                       <ArrowUpTrayIcon className="w-4 h-4 rotate-90" />
                     </button>
@@ -769,7 +769,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                 disabled={
                    status === 'analyzing' || (planItems.filter((i) => i.checked).length === 0 && !userInput)
                 }
-                className="w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-4 bg-gradient-to-r from-amber-400 to-purple-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {status === 'analyzing' ? (
                      <>
@@ -798,24 +798,24 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                 <button 
                   onClick={startMasking}
                   disabled={isProcessing}
-                  className="w-full py-2 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm"
+                  className="w-full py-2 bg-[#1a1a1a] border border-white/10 text-gray-300 rounded-xl font-medium hover:text-purple-400 hover:border-purple-300 transition-all flex items-center justify-center gap-2 text-sm"
                 >
                     <PaintBrushIcon className="w-4 h-4" /> {dict.manualTouchup}
                 </button>
               )}
               
               <div className={`flex items-center gap-2 text-sm p-2 rounded-lg mb-2 transition-colors
-                  ${isMaskingMode ? 'bg-purple-100 border border-purple-200' : 'bg-green-50'}
+                  ${isMaskingMode ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-amber-500/10 border border-amber-500/20'}
               `}>
                 {isMaskingMode ? (
                     <>
-                        <PaintBrushIcon className="w-5 h-5 text-purple-600 animate-bounce" />
-                        <span className="text-purple-900 font-bold">{dict.annotateGuide}</span>
+                        <PaintBrushIcon className="w-5 h-5 text-purple-400 animate-bounce" />
+                        <span className="text-purple-300 font-bold">{dict.annotateGuide}</span>
                     </>
                 ) : (
                     <>
-                        <CheckCircleIcon className="w-5 h-5 text-green-600" />
-                        <span className="text-green-700">{dict.doneAddMore}</span>
+                        <CheckCircleIcon className="w-5 h-5 text-amber-400" />
+                        <span className="text-amber-300">{dict.doneAddMore}</span>
                     </>
                 )}
               </div>
@@ -827,7 +827,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                     type="text"
                     placeholder={dict.placeholderEdit}
                     disabled={isProcessing}
-                    className="w-full pl-4 pr-12 py-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-sm text-gray-200 placeholder-gray-400 outline-none shadow-sm focus:ring-2 focus:ring-green-500 transition-all"
+                    className="w-full pl-4 pr-12 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm text-gray-200 placeholder-gray-400 outline-none shadow-sm focus:ring-2 focus:ring-amber-500 transition-all"
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleUserSubmit()}
@@ -835,7 +835,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                     <button
                     onClick={handleUserSubmit}
                     disabled={isProcessing}
-                    className="absolute right-2 top-1.5 p-1.5 text-white rounded-lg transition-colors bg-green-500 hover:bg-green-600 disabled:opacity-50"
+                    className="absolute right-2 top-1.5 p-1.5 text-white rounded-lg transition-colors bg-amber-500 hover:bg-amber-600 disabled:opacity-50"
                     >
                     {isProcessing ? (
                         <ArrowPathIcon className="w-4 h-4 animate-spin" />
@@ -871,7 +871,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                             {isUpscaling ? dict.upscalingBtn : dict.magicUpscale}
                         </button>
                         ) : (
-                        <div className="w-full py-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl font-medium flex items-center justify-center gap-2">
+                        <div className="w-full py-3 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-xl font-medium flex items-center justify-center gap-2">
                             <CheckIcon className="w-5 h-5" /> {dict.enhanced}
                         </div>
                         )}
@@ -880,7 +880,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                         <a
                             href={currentDisplayImage || ''}
                             download="magic-result.png"
-                            className="w-full flex items-center justify-center py-3 bg-zinc-900 text-white rounded-xl font-medium hover:bg-zinc-800 transition-colors shadow-lg"
+                            className="w-full flex items-center justify-center py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium transition-colors shadow-lg"
                         >
                             {isHighRes ? dict.download4k : dict.downloadResult}
                         </a>

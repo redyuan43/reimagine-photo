@@ -1,7 +1,8 @@
 
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PhotoIcon, PaperAirplaneIcon, SparklesIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { PhotoIcon, PaperAirplaneIcon, ArrowUpTrayIcon, HandThumbUpIcon, StarIcon, BoltIcon, FaceSmileIcon } from '@heroicons/react/24/outline';
+import * as THREE from 'three';
 
 interface HomePageProps {
   onStart: (file: File, prompt: string) => void;
@@ -19,6 +20,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
   const transitionLayerRef = useRef<HTMLDivElement>(null);
   const themeBtnRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const generateBtnRef = useRef<HTMLButtonElement>(null);
+  const bhContainerRef = useRef<HTMLDivElement>(null);
 
   // --- STATE ---
   const [isNight, setIsNight] = useState(true);
@@ -27,31 +31,42 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const dragCounter = useRef(0);
 
   // --- TRANSLATION ---
   const t = useMemo(() => ({
     en: {
-      badge: 'Professional Studio',
-      h1a: 'Reimagine Photos',
-      h1b: 'With Intelligent Tech',
-      sub: 'Experience next-generation photo retouching with professional models.\n4K Upscaling. High-Fidelity Editing. Instant Magic.',
-      dragTip: 'Release to Magic Edit',
-      describePlaceholder: 'Describe your idea...',
-      example: 'Example',
-      examplePrompt: 'Remove the background and add a neon glow',
-      supports: 'Supports JPG, PNG, WEBP, RAW'
+      badge: 'LUMINA',
+      h1a: 'Redefine Reality',
+      h1b: 'Pixel by Pixel',
+      sub: 'Harnessing next-gen neural networks to deliver professional studio quality.\nCrystal clear upscaling. Intelligent relighting. Instant mastery.',
+      dragTip: 'Drop to Edit',
+      describePlaceholder: 'Describe your edits (e.g. "Smooth skin and brighten")',
+      example: 'Try',
+      examplePrompt: 'Auto fix lighting and smooth skin texture',
+      supports: 'Supports JPG, PNG, WEBP, RAW',
+      features: [
+        { title: 'No Skills Needed', desc: 'No professional Photoshop skills needed' },
+        { title: 'Intuitive', desc: 'Intuitive operation is enough' },
+        { title: 'Pro Quality', desc: 'Get professional quality results' }
+      ]
     },
     zh: {
-      badge: '专业工作室',
-      h1a: '重想照片',
-      h1b: '由智能科技加持',
-      sub: '使用专业模型体验下一代照片润饰。\n4K超分、高清编辑、即时魔法。',
-      dragTip: '松开以魔法编辑',
-      describePlaceholder: '描述你的想法...',
-      example: '示例',
-      examplePrompt: '封面标题“幕布日记”，丝绒幕布配暖色聚光与居中衬线字',
-      supports: '支持 JPG、PNG、WEBP、RAW'
+      badge: 'LUMINA 灵光',
+      h1a: '重塑影像',
+      h1b: '仅需一瞬',
+      sub: '搭载下一代视觉大模型，为照片注入专业级光影与细节。\n4K超清重绘 · 智能光影重塑 · 毫秒级即时响应',
+      dragTip: '松开开始编辑',
+      describePlaceholder: '描述修图需求 (如：磨皮并提亮画面)...',
+      example: '试一试',
+      examplePrompt: '自动优化光影，进行人像磨皮美白',
+      supports: '支持 JPG、PNG、WEBP、RAW',
+      features: [
+        { title: '无需技能', desc: '无需专业 Photoshop 技能' },
+        { title: '直观操作', desc: '直观操作即可' },
+        { title: '专业质感', desc: '获得专业级质感' }
+      ]
     },
   }), []);
   const dict = t[lang];
@@ -75,6 +90,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
     let backgroundObjects: any[] = [];
     let flyingObjects: any[] = [];
     let particles: any[] = [];
+    let colliders: Array<{ left: number; top: number; right: number; bottom: number }> = [];
     
     // Track previous theme to detect switch instantly in loop
     let lastIsNight = isNightRef.current;
@@ -233,6 +249,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
             if (this.mode === 'meteor') {
                 const hitEdge = this.y >= height || this.x <= 0;
                 const burnedOut = this.life >= this.maxLife;
+                for (let i = 0; i < colliders.length; i++) {
+                    const c = colliders[i];
+                    if (this.x >= c.left && this.x <= c.right && this.y >= c.top && this.y <= c.bottom) {
+                        createParticles(this.x, this.y, 'spark');
+                        return true;
+                    }
+                }
                 if (hitEdge) {
                     let exX = this.x; 
                     let exY = this.y;
@@ -348,7 +371,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
     // --- LOGIC ---
     const createParticles = (x: number, y: number, type: string) => {
-        const count = type === 'spark' ? 30 : 40;
+        const count = type === 'spark' ? 40 : 50;
         for (let i = 0; i < count; i++) {
             particles.push(new Particle(x, y, type));
         }
@@ -363,12 +386,30 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
         }
     };
 
+    const updateColliders = () => {
+        const rects: Array<{ left: number; top: number; right: number; bottom: number }> = [];
+        if (titleRef.current) {
+            const r = titleRef.current.getBoundingClientRect();
+            rects.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+        }
+        if (generateBtnRef.current) {
+            const r = generateBtnRef.current.getBoundingClientRect();
+            rects.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+        }
+        document.querySelectorAll('[data-collider="true"]').forEach((el) => {
+            const r = (el as HTMLElement).getBoundingClientRect();
+            rects.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+        });
+        colliders = rects;
+    };
+
     const resize = () => {
         width = window.innerWidth;
         height = window.innerHeight;
         canvas.width = width;
         canvas.height = height;
         createBackground();
+        updateColliders();
     };
 
     const animate = () => {
@@ -400,7 +441,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
         backgroundObjects.forEach(obj => obj.draw(ctx));
 
         // Spawn Rate
-        const spawnRate = isNightRef.current ? 0.0088 : 0.022; 
+        const spawnRate = isNightRef.current ? 0.0288 : 0.032; 
         if (Math.random() < spawnRate) {
             flyingObjects.push(new Flyer());
         }
@@ -494,6 +535,180 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
     }
   }, [isNight]);
 
+  useEffect(() => {
+    const container = bhContainerRef.current;
+    if (!container) return;
+
+    const VERTEX_SHADER = `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = vec4(position, 1.0);
+      }
+    `;
+
+    const FRAGMENT_SHADER = `
+      uniform float iTime;
+      uniform vec2 iResolution;
+      uniform vec3 iCamPos;
+      uniform vec3 iCamTarget;
+      varying vec2 vUv;
+      #define MAX_STEPS 100
+      #define MAX_DIST 60.0
+      #define BH_RADIUS 1.5
+      #define DISK_INNER 2.2
+      #define DISK_OUTER 5.8
+      float hash(float n){return fract(sin(n)*43758.5453123);} 
+      float noise(vec3 x){
+        vec3 p=floor(x);vec3 f=fract(x);f=f*f*(3.0-2.0*f);
+        float n=p.x+p.y*57.0+113.0*p.z;
+        return mix(mix(mix(hash(n+0.0),hash(n+1.0),f.x),mix(hash(n+57.0),hash(n+58.0),f.x),f.y),mix(mix(hash(n+113.0),hash(n+114.0),f.x),mix(hash(n+170.0),hash(n+171.0),f.x),f.y),f.z);
+      }
+      float fbm(vec3 p){float f=0.0;float amp=0.5;for(int i=0;i<5;i++){f+=amp*noise(p);p*=2.0;amp*=0.5;}return f;}
+      vec3 render(vec3 ro, vec3 rd){
+        vec3 col=vec3(0.0);vec3 p=ro;vec3 v=rd;float diskAcc=0.0;vec3 diskCol=vec3(0.0);float distToCenter=0.0;float totDist=0.0;
+        for(int i=0;i<MAX_STEPS;i++){
+          distToCenter=length(p);
+          float gravityStrength=0.15*(1.0/(distToCenter*distToCenter+0.1));
+          vec3 toCenter=normalize(-p);
+          v=normalize(v+toCenter*gravityStrength);
+          float stepSize=max(0.1,distToCenter*0.08);
+          p+=v*stepSize;totDist+=stepSize;
+          if(distToCenter<BH_RADIUS){return diskCol;}
+          float absY=abs(p.y);
+          if(absY<0.6){
+            float d=length(p.xz);
+            if(d>DISK_INNER && d<DISK_OUTER){
+              float speed=3.0/(d-0.5);float timeOffset=iTime*speed;
+              vec3 noisePos=vec3(p.x*2.5,p.z*2.5,timeOffset);
+              float noiseVal=fbm(noisePos);
+              float radialFade=smoothstep(DISK_INNER,DISK_INNER+0.8,d)*(1.0-smoothstep(DISK_OUTER-1.5,DISK_OUTER,d));
+              float verticalFade=exp(-absY*12.0);
+              float intensity=noiseVal*radialFade*verticalFade;
+              vec3 sampleColor=mix(vec3(0.8,0.3,0.05),vec3(1.0,0.8,0.5),intensity*2.0);
+              vec3 tanDir=normalize(vec3(-p.z,0.0,p.x));
+              float doppler=dot(tanDir,normalize(ro));
+              intensity*=(1.0+doppler*0.6);
+              float alpha=intensity*stepSize*2.5;alpha=clamp(alpha,0.0,1.0);
+              diskCol+=sampleColor*alpha*(1.0-diskAcc);
+              diskAcc+=alpha; if(diskAcc>=1.0) break;
+            }
+          }
+          if(totDist>MAX_DIST) break;
+        }
+        return diskCol+col;
+      }
+      void main(){
+        vec2 uv=(gl_FragCoord.xy-0.5*iResolution.xy)/iResolution.y;
+        vec3 ro=iCamPos;vec3 ta=iCamTarget;
+        vec3 ww=normalize(ta-ro);
+        vec3 uu=normalize(cross(ww,vec3(0.0,1.0,0.0)));
+        vec3 vv=normalize(cross(uu,ww));
+        float fov=1.3;vec3 rd=normalize(uv.x*uu+uv.y*vv+fov*ww);
+        vec3 col=render(ro,rd);
+        col=pow(col,vec3(0.6));
+        col=smoothstep(0.02,1.0,col);
+        float vignette=1.0-smoothstep(0.5,1.6,length(uv));
+        col*=mix(0.6,1.0,vignette);
+        col*=0.5;
+        float a = clamp(col.r + col.g + col.b, 0.0, 1.0);
+        gl_FragColor=vec4(col, a);
+      }
+    `;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.innerHTML = '';
+    container.appendChild(renderer.domElement);
+    renderer.domElement.style.position = 'absolute';
+    renderer.domElement.style.top = '0';
+    renderer.domElement.style.left = '0';
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+
+    const uniforms = {
+      iTime: { value: 0 },
+      iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      iCamPos: { value: new THREE.Vector3() },
+      iCamTarget: { value: new THREE.Vector3(0, 0, 0) },
+    };
+
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const material = new THREE.ShaderMaterial({ vertexShader: VERTEX_SHADER, fragmentShader: FRAGMENT_SHADER, uniforms, transparent: true });
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+
+    let isDragging = false;
+    let lastX = 0, lastY = 0;
+    let targetLat = 0.101799, targetLon = -1.5;
+    let lat = 0.101799, lon = -1.5;
+    let distance = 11.0;
+    let parallaxX = 0, parallaxY = 0;
+
+    const onResize = () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      uniforms.iResolution.value.set(window.innerWidth, window.innerHeight);
+    };
+    const onMouseDown = (e: MouseEvent) => { isDragging = true; lastX = e.clientX; lastY = e.clientY; };
+    const onMouseUp = () => { isDragging = false; };
+    const onMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        const dx = e.clientX - lastX; const dy = e.clientY - lastY;
+        targetLon -= dx * 0.005; targetLat += dy * 0.005; targetLat = Math.max(-1.4, Math.min(1.4, targetLat));
+        lastX = e.clientX; lastY = e.clientY;
+      }
+      // 保留内部相机交互，不再修改标题位置，避免偏移
+    };
+    const onWheel = (e: WheelEvent) => { distance += e.deltaY * 0.01; distance = Math.max(5.0, Math.min(20.0, distance)); };
+    const onTouchStart = (e: TouchEvent) => { isDragging = true; lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (isDragging) {
+        const dx = e.touches[0].clientX - lastX; const dy = e.touches[0].clientY - lastY;
+        targetLon -= dx * 0.005; targetLat += dy * 0.005; targetLat = Math.max(-1.4, Math.min(1.4, targetLat));
+        lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+      }
+    };
+    const onTouchEnd = () => { isDragging = false; };
+
+    let rafId = 0;
+    const animate = (time: number) => {
+      rafId = requestAnimationFrame(animate);
+      uniforms.iTime.value = time * 0.001;
+      lat += (targetLat - lat) * 0.05; lon += (targetLon - lon) * 0.05;
+      const cx = distance * Math.cos(lat) * Math.sin(lon);
+      const cy = distance * Math.sin(lat);
+      const cz = distance * Math.cos(lat) * Math.cos(lon);
+      uniforms.iCamPos.value.set(cx, cy, cz);
+      renderer.render(scene, camera);
+    };
+
+    window.addEventListener('resize', onResize);
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('wheel', onWheel, { passive: true } as any);
+    window.addEventListener('touchstart', onTouchStart, { passive: true } as any);
+    window.addEventListener('touchmove', onTouchMove, { passive: false } as any);
+    window.addEventListener('touchend', onTouchEnd, { passive: true } as any);
+    animate(0);
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('wheel', onWheel as any);
+      window.removeEventListener('touchstart', onTouchStart as any);
+      window.removeEventListener('touchmove', onTouchMove as any);
+      window.removeEventListener('touchend', onTouchEnd as any);
+      cancelAnimationFrame(rafId);
+      geometry.dispose(); material.dispose(); renderer.dispose();
+      if (renderer.domElement && renderer.domElement.parentElement) renderer.domElement.parentElement.removeChild(renderer.domElement);
+    };
+  }, []);
 
   // --- HANDLERS ---
   const handleThemeSwitch = (e: React.MouseEvent) => {
@@ -566,42 +781,59 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
   const handleSubmit = () => {
     if (selectedFile) {
-        onStart(selectedFile, promptText);
+        setIsLoading(true);
+        // Simulate loading for animation demo
+        setTimeout(() => {
+            onStart(selectedFile, promptText);
+            setIsLoading(false);
+        }, 2000);
     }
   };
 
   return (
-    <div className="relative overflow-hidden font-sans" style={{ backgroundColor: '#0b0b0c', transition: 'background-color 0.8s', minHeight: '100vh', width: '100vw' }}>
+    <div className="relative overflow-hidden font-sans selection:bg-amber-500/30" style={{ backgroundColor: '#0b0b0c', transition: 'background-color 0.8s', minHeight: '100vh', width: '100vw' }}>
       
       {/* 0. Canvas Layers */}
-      <canvas ref={canvasRef} className="z-0 block" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
+      <canvas ref={canvasRef} className="z-0 block opacity-80" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
+      <div className="z-0 absolute inset-0 bg-gradient-to-b from-transparent via-[#0b0b0c]/50 to-[#0b0b0c] pointer-events-none" />
+      
+      <div ref={bhContainerRef} className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true" />
+      {/* Premium Glow */}
+      <div className="z-0 absolute top-[-20%] left-[20%] w-[60vw] h-[60vw] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
+      <div className="z-0 absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-amber-600/5 blur-[100px] rounded-full pointer-events-none" />
+      
       <div ref={transitionLayerRef} className="z-10 pointer-events-none opacity-0" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
 
-      {/* 1. Theme Toggle */}
-      <button 
-        ref={themeBtnRef}
-        onClick={handleThemeSwitch}
-        className="theme-toggle absolute top-6 right-6 z-50 w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-lg hover:scale-110 hover:rotate-12 transition-all"
-      >
-        {isNight ? (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-        ) : (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-        )}
-      </button>
+      {/* 1. Top Navigation */}
+      <nav className="absolute top-0 left-0 right-0 z-50 p-6 flex justify-between items-center">
+         {/* Brand Left (Optional, kept clean for now) */}
+         <div className="w-12"></div> 
 
-      {/* 1.5 Lang Toggle */}
-      <button 
-        onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
-        className="absolute top-6 right-20 z-50 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-bold shadow-lg hover:bg-white/20 transition-all"
-      >
-          {lang.toUpperCase()}
-      </button>
+         {/* Controls Right */}
+         <div className="flex items-center gap-4">
+            <button 
+                onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
+                className="px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 text-white/80 hover:text-white text-xs font-medium tracking-wide transition-all"
+            >
+                {lang === 'en' ? '中文' : 'EN'}
+            </button>
+            <button 
+                ref={themeBtnRef}
+                onClick={handleThemeSwitch}
+                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:text-white transition-all"
+            >
+                {isNight ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                )}
+            </button>
+         </div>
+      </nav>
 
-      {/* 2. Main UI Content (Overlay) */}
+      {/* 2. Main UI Content */}
       <div 
-        className="z-30 px-4"
-        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+        className="z-30 relative w-full h-screen flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8"
         onDragEnter={handleDragIn}
         onDragLeave={handleDragOut}
         onDragOver={handleDrag}
@@ -614,104 +846,137 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute inset-0 z-50 bg-purple-600/20 backdrop-blur-sm border-4 border-purple-400 border-dashed m-4 rounded-3xl flex items-center justify-center"
+                    className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm border-4 border-white/20 border-dashed m-4 rounded-3xl flex items-center justify-center"
                 >
                     <div className="text-center text-white">
-                        <ArrowUpTrayIcon className="w-16 h-16 mx-auto mb-4 animate-bounce" />
-                        <h3 className="text-3xl font-bold">{dict.dragTip}</h3>
+                        <ArrowUpTrayIcon className="w-16 h-16 mx-auto mb-6 animate-bounce text-white/80" />
+                        <h3 className="text-3xl font-light tracking-tight">{dict.dragTip}</h3>
                     </div>
                 </motion.div>
             )}
          </AnimatePresence>
 
-         <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className={`w-full max-w-4xl text-center mb-10 transition-colors duration-700 text-white`}
-         >
-             <span className="inline-block px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-bold tracking-wider mb-6 backdrop-blur-md">
-                {dict.badge}
-             </span>
-             <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 drop-shadow-lg">
-                <span className="block mb-2">{dict.h1a}</span>
-                <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                    {dict.h1b}
-                </span>
-             </h1>
-             <p className={`text-lg md:text-xl max-w-2xl mx-auto leading-relaxed opacity-80 whitespace-pre-line drop-shadow-md`}>
-                {dict.sub}
-             </p>
-         </motion.div>
+         {/* Content Wrapper */}
+         <div className="w-full max-w-5xl mx-auto flex flex-col items-center">
+             
+            <motion.div 
+               initial={{ opacity: 0, y: 20 }}
+               animate={{ opacity: 1, y: 0 }}
+               transition={{ duration: 0.8, ease: "easeOut" }}
+               className="text-center mb-20 relative"
+            >
+                <h1 ref={titleRef} className="text-7xl md:text-9xl lg:text-[12rem] font-bold tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-br from-amber-100 via-white to-purple-200 uppercase drop-shadow-2xl select-none">
+                   {'LUMINA'}
+                </h1>
+            </motion.div>
 
-         {/* 3. Input & Upload Box */}
-         <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.4 }}
-            className="w-full max-w-2xl"
-         >
-             <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-2 rounded-2xl shadow-2xl flex flex-col md:flex-row gap-2">
-                 {/* Upload Trigger */}
-                 <div className="relative group flex-shrink-0">
-                     <input 
-                        type="file" 
-                        ref={fileInputRef}
-                        onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
-                        className="hidden"
-                        accept="image/*"
-                     />
-                     <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full md:w-32 h-16 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition-all flex flex-col items-center justify-center text-white/80 group-hover:text-white overflow-hidden relative"
-                     >
-                         {filePreview ? (
-                             <img src={filePreview} className="absolute inset-0 w-full h-full object-cover opacity-80" />
-                         ) : (
-                             <>
-                                <PhotoIcon className="w-6 h-6 mb-1" />
-                                <span className="text-xs font-medium opacity-70">Upload</span>
-                             </>
-                         )}
-                     </button>
+             {/* Input Section */}
+             <motion.div 
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2, duration: 0.6 }}
+                className="w-full max-w-3xl mb-16"
+             >
+                 <div className="group relative bg-white/5 hover:bg-white/10 backdrop-blur-2xl border border-white/10 rounded-2xl p-2 transition-all duration-300 shadow-2xl hover:shadow-amber-500/5 ring-1 ring-white/5 focus-within:ring-amber-500/20">
+                     <div className="flex items-center gap-2">
+                         {/* Upload Button */}
+                         <div className="relative">
+                             <input 
+                                type="file" 
+                                ref={fileInputRef}
+                                onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
+                                className="hidden"
+                                accept="image/*"
+                             />
+                             <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-14 h-14 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-white/70 transition-all overflow-hidden"
+                             >
+                                 {filePreview ? (
+                                     <img src={filePreview} className="w-full h-full object-cover" />
+                                 ) : (
+                                     <PhotoIcon className="w-6 h-6" />
+                                 )}
+                             </button>
+                         </div>
+
+                         {/* Input Field */}
+                         <div className="flex-1 relative">
+                             <input 
+                                type="text"
+                                value={promptText}
+                                onChange={(e) => setPromptText(e.target.value)}
+                                placeholder={dict.describePlaceholder}
+                                className="w-full h-14 bg-transparent text-white placeholder-white/30 px-4 text-lg outline-none font-light"
+                                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                             />
+                         </div>
+
+                         {/* Action Button */}
+                         <button 
+                            ref={generateBtnRef}
+                            onClick={handleSubmit}
+                            disabled={!selectedFile || isLoading}
+                            className="h-14 px-8 rounded-xl bg-white text-black hover:bg-amber-50 disabled:bg-white/10 disabled:text-white/20 font-semibold text-base transition-all flex items-center gap-2 shadow-lg disabled:shadow-none disabled:cursor-not-allowed relative overflow-hidden"
+                         >
+                             <span className={`transition-opacity duration-200 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>
+                                {lang === 'zh' ? '生成' : 'Generate'}
+                             </span>
+                             {isLoading && (
+                               <div className="absolute inset-0 flex items-center justify-center">
+                                 <BlinkingSmileIcon className="w-8 h-8 text-amber-600" />
+                               </div>
+                             )}
+                             {!isLoading && <FaceSmileIcon className="w-6 h-6" />}
+                         </button>
+                     </div>
                  </div>
 
-                 {/* Text Input */}
-                 <div className="flex-1 relative">
-                     <input 
-                        type="text"
-                        value={promptText}
-                        onChange={(e) => setPromptText(e.target.value)}
-                        placeholder={dict.describePlaceholder}
-                        className="w-full h-16 bg-transparent text-white placeholder-white/40 px-4 text-lg outline-none"
-                        onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                     />
-                     {/* Suggestion Pill */}
-                     {!promptText && (
+                 {/* Quick Prompts / Examples */}
+                 {!promptText && (
+                    <div className="mt-4 flex justify-center">
                         <button 
                             onClick={() => setPromptText(dict.examplePrompt)}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-xs text-white/60 hover:text-white transition-colors border border-white/5 truncate max-w-[120px]"
+                            className="text-xs text-white/40 hover:text-white/80 transition-colors flex items-center gap-2"
                         >
-                            {dict.example}
+                            <span className="opacity-50">{dict.example}:</span>
+                            <span>"{dict.examplePrompt}"</span>
                         </button>
-                     )}
-                 </div>
+                    </div>
+                 )}
+             </motion.div>
 
-                 {/* Generate Button */}
-                 <button 
-                    onClick={handleSubmit}
-                    disabled={!selectedFile}
-                    className="h-16 px-8 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 group"
-                 >
-                     <SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                 </button>
-             </div>
-             <p className="text-center text-white/40 text-xs mt-4">
-                 {dict.supports}
-             </p>
-         </motion.div>
+             {/* Features Grid */}
+             <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.6 }}
+                className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl px-4"
+             >
+                {dict.features.map((feat: any, i: number) => (
+                     <div key={i} className="flex flex-col items-center text-center p-4 rounded-2xl hover:bg-white/5 transition-colors duration-500 group">
+                         <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/80 mb-4 group-hover:scale-110 transition-transform duration-500" data-collider="true">
+                             {i === 0 && <HandThumbUpIcon className="w-5 h-5" />}
+                             {i === 1 && <BoltIcon className="w-5 h-5" />}
+                             {i === 2 && <StarIcon className="w-5 h-5" />}
+                         </div>
+                         <h3 className="text-white font-medium mb-1">{feat.title}</h3>
+                         <p className="text-sm text-white/40 font-light">{feat.desc}</p>
+                     </div>
+                 ))}
+             </motion.div>
+
+         </div>
       </div>
 
     </div>
   );
 };
+  const BlinkingSmileIcon: React.FC<{ className?: string }> = ({ className = '' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
+      <motion.circle cx="9.5" cy="9.75" r="0.9" fill="currentColor" style={{ transformOrigin: 'center' }} animate={{ scaleY: [1, 0.15, 1, 1, 1, 1] }} transition={{ duration: 1.8, repeat: Infinity, times: [0, 0.12, 0.24, 0.5, 0.6, 1] }} />
+      <motion.circle cx="14.5" cy="9.75" r="0.9" fill="currentColor" style={{ transformOrigin: 'center' }} animate={{ scaleY: [1, 1, 1, 1, 0.15, 1] }} transition={{ duration: 1.8, repeat: Infinity, times: [0, 0.5, 0.6, 0.72, 0.84, 1] }} />
+      <path d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
