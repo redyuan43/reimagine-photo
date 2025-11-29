@@ -60,8 +60,14 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   const listEndRef = useRef<HTMLDivElement>(null);
   const layoutRef = useRef<HTMLDivElement>(null);
   const [leftPct, setLeftPct] = useState(42);
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
+  const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
+  const toggleExpand = (id: string) => setExpandedMap(prev => ({ ...prev, [id]: !prev[id] }));
   const [isResizing, setIsResizing] = useState(false);
   const [summaryText, setSummaryText] = useState('');
+  const rightPaneRef = useRef<HTMLDivElement>(null);
+  const [isCompactHeader, setIsCompactHeader] = useState(false);
+  const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
 
   // Translations
   const t = useMemo(() => ({
@@ -191,6 +197,27 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     }
   }, [planItems.length, status]);
 
+  useEffect(() => {
+    const el = rightPaneRef.current;
+    if (!el) return;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const st = el.scrollTop;
+        const collapsed = st > 4;
+        setIsCompactHeader(collapsed);
+        setIsSummaryCollapsed(collapsed);
+        ticking = false;
+      });
+    };
+    el.addEventListener('scroll', onScroll);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+    };
+  }, []);
+
 
   useEffect(() => {
     const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
@@ -250,7 +277,8 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   const handleFilterSelect = (itemId: string, option: string) => {
       setPlanItems(prev => prev.map(item => {
           if (item.id === itemId) {
-              return { ...item, selectedOption: option, checked: true };
+              const label = lang === 'zh' ? `风格滤镜：${option}` : `Filter: ${option}`;
+              return { ...item, selectedOption: option, checked: true, solution: label };
           }
           return item;
       }));
@@ -567,24 +595,36 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
 
       <div onMouseDown={() => setIsResizing(true)} onTouchStart={() => setIsResizing(true)} style={{ width: 10, cursor: 'col-resize', height: '100vh', background: 'transparent' }} />
       <div className="bg-[#121212] border-l border-white/10 flex flex-col shadow-2xl z-10 text-white" style={{ width: `${100 - leftPct}%`, height: '100vh' }}>
-        <div className="p-6 border-b border-white/10 flex-shrink-0 bg-black/30">
+        <div className={`${isCompactHeader ? 'p-2' : 'p-6'} border-b border-white/10 flex-shrink-0 bg-black/30 transition-all duration-300`}>
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <h2 className={`${isCompactHeader ? 'text-base' : 'text-xl'} font-bold text-white flex items-center gap-2`}>
               <SparklesIcon className="w-5 h-5 text-purple-600" />
               {dict.smartAssistant}
             </h2>
-            <button
-              onClick={onReset}
-              className="text-xs text-gray-300 hover:text-white underline"
-            >
-              {dict.newUpload}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  const next = isPreviewCollapsed ? 42 : 24;
+                  setLeftPct(next);
+                  setIsPreviewCollapsed(!isPreviewCollapsed);
+                }}
+                className="text-xs px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-gray-200 border border-white/10 transition-colors"
+              >
+                {isPreviewCollapsed ? '展开预览' : '收起预览'}
+              </button>
+              <button
+                onClick={onReset}
+                className="text-xs text-gray-300 hover:text-white underline"
+              >
+                {dict.newUpload}
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+        <div ref={rightPaneRef} className="flex-1 overflow-y-auto p-6 custom-scrollbar">
             {/* Step List */}
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
               <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
               <AnimatePresence>
                 {planItems.map((item, index) => {
@@ -638,9 +678,17 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                       {/* Body Section */}
                       <div className="p-4">
                           {/* Problem Description */}
-                          <p className="text-sm text-gray-300 mb-4 leading-relaxed font-light">
+                          <p className={`text-sm text-gray-300 leading-relaxed font-light ${expandedMap[item.id] ? '' : 'line-clamp-2'} mb-2`}>
                               {item.problem}
                           </p>
+                          {(item.problem && item.problem.length > 28) && (
+                            <button
+                              className="text-xs text-gray-400 hover:text-white underline"
+                              onClick={() => toggleExpand(item.id)}
+                            >
+                              {expandedMap[item.id] ? '收起' : '展开更多'}
+                            </button>
+                          )}
 
                           {/* Solution Action Button */}
                           <div
@@ -723,7 +771,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         </div>
 
         {summaryText !== undefined && (
-          <div className="px-6 py-4 border-t border-white/10 bg-[#121212]">
+          <div className={`px-6 border-t border-white/10 bg-[#121212] transition-all duration-300 ${isSummaryCollapsed ? 'py-0 max-h-0 overflow-hidden' : 'py-4'}`}>
             <div className="max-w-none">
               <h3 className="text-sm font-semibold text-white mb-2">总结</h3>
               {summaryText ? (
@@ -762,26 +810,25 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                   >
                     <PaintBrushIcon className="w-5 h-5" />
                   </button>
+                  <button
+                    onClick={() => executeMagic()}
+                    disabled={
+                       status === 'analyzing' || (planItems.filter((i) => i.checked).length === 0 && !userInput)
+                    }
+                    className="px-5 py-3 bg-gradient-to-r from-amber-400 to-purple-600 text-white rounded-xl font-bold text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {status === 'analyzing' ? (
+                         <>
+                            <ArrowPathIcon className="w-5 h-5 animate-spin" /> {dict.analyzing}
+                         </>
+                    ) : (
+                        <>
+                            <MagicWandIcon className="w-6 h-6 group-hover:rotate-12 transition-transform" />{' '}
+                            {dict.generate}
+                        </>
+                    )}
+                  </button>
               </div>
-              
-              <button
-                onClick={() => executeMagic()}
-                disabled={
-                   status === 'analyzing' || (planItems.filter((i) => i.checked).length === 0 && !userInput)
-                }
-                className="w-full py-4 bg-gradient-to-r from-amber-400 to-purple-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {status === 'analyzing' ? (
-                     <>
-                        <ArrowPathIcon className="w-5 h-5 animate-spin" /> {dict.analyzing}
-                     </>
-                ) : (
-                    <>
-                        <MagicWandIcon className="w-6 h-6 group-hover:rotate-12 transition-transform" />{' '}
-                        {dict.generate}
-                    </>
-                )}
-              </button>
             </div>
           )}
           {status === 'executing' && (
