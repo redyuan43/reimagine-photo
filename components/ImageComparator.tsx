@@ -178,7 +178,8 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
         style={{
           transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
           transition: isPanning ? 'none' : 'transform 0.2s ease-out',
-          willChange: 'transform'
+          willChange: 'transform',
+          transformOrigin: 'top left'
         }}
       >
       {/* Bottom Image (Modified) */}
