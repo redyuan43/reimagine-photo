@@ -610,80 +610,91 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                   return (
                     <motion.div
                       key={item.id}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
                       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                      className={`group border rounded-2xl p-4 transition-all duration-300 relative overflow-hidden
+                      className={`group relative overflow-hidden rounded-2xl border transition-all duration-300
                           ${
                             isProcessingThis
-                              ? 'bg-purple-500/10 border-purple-400 shadow-md ring-1 ring-purple-400/30 scale-[1.02]'
+                              ? 'bg-purple-900/10 border-purple-500/30 shadow-[0_0_20px_rgba(168,85,247,0.1)]'
                               : isDone
-                              ? 'bg-green-500/10 border-green-400 shadow-sm'
-                              : 'bg-[#1a1a1a] border-white/10'
+                              ? 'bg-green-900/10 border-green-500/30'
+                              : 'bg-[#1a1a1a] border-white/5 hover:border-white/10'
                           }
                       `}
                     >
-                      {status === 'analyzing' && (
-                        <div style={{ position:'absolute', inset:0, background:'linear-gradient(90deg, rgba(255,255,255,0), rgba(124,58,237,0.16), rgba(255,255,255,0))', transform:'translateX(-100%)', animation:'shimmer 1.8s linear infinite' }} />
-                      )}
-                      <div className="relative z-10">
-                        <div className="flex gap-3 mb-3">
-                          <div className="mt-1 flex-shrink-0">
-                            {item.isCustom ? (
-                                <SparklesIcon className={`w-5 h-5 ${isDone ? 'text-green-500' : 'text-purple-500'}`} />
-                            ) : (
-                                <ExclamationTriangleIcon className={`w-5 h-5 ${isDone ? 'text-green-400' : 'text-red-400'}`} />
-                            )}
-                          </div>
-                          <div>
-                            <h4 className={`text-xs font-bold uppercase tracking-wide mb-0.5 ${isDone ? 'text-green-400' : (item.isCustom ? 'text-purple-400' : 'text-red-400')}`}>
-                              {item.isCustom ? dict.userRequest : dict.issue}
-                            </h4>
-                            <p className="text-sm text-gray-200 font-medium">
-                              {item.problem}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div
-                          onClick={() => (status === 'ready' || status === 'analyzing') && toggleItem(item.id)}
-                          className={`relative overflow-hidden flex gap-3 items-start p-3 rounded-xl cursor-pointer transition-colors 
-                              ${
-                                isDone
-                                    ? 'bg-green-900/20 text-green-300'
-                                    : isProcessingThis 
-                                      ? 'bg-purple-900/20 text-purple-300'
-                                      : 'bg-[#181818] text-gray-300 hover:bg-[#202020]'
-                              }
-                          `}
-                        >
-                          <div
-                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all mt-0.5 
-                                  ${
-                                    isDone
-                                      ? 'border-green-500 bg-green-500 scale-110'
-                                      : isProcessingThis
-                                        ? 'border-purple-500 border-t-transparent animate-spin'
-                                        : 'border-purple-500 bg-purple-500'
-                                  }
-                              `}
-                          >
-                            {isDone && (
-                              <CheckIcon className="w-3 h-3 text-white" />
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold mb-1 flex items-center justify-between text-white">
-                              {item.solution}
-                              {isProcessingThis && (
-                                <span className="text-xs text-purple-400 font-bold animate-pulse">
-                                  {dict.processingStep}
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
+                      {/* Header Section */}
+                      <div className="px-4 py-3 flex items-center gap-2.5 border-b border-white/5 bg-white/[0.02]">
+                          {item.isCustom ? (
+                              <SparklesIcon className={`w-4 h-4 ${isDone ? 'text-green-400' : 'text-purple-400'}`} />
+                          ) : (
+                              <ExclamationTriangleIcon className={`w-4 h-4 ${isDone ? 'text-green-400' : 'text-amber-400'}`} />
+                          )}
+                          <span className={`text-xs font-bold tracking-wider uppercase ${isDone ? 'text-green-400' : (item.isCustom ? 'text-purple-400' : 'text-amber-400')}`}>
+                              {item.isCustom ? dict.userRequest : (item.category || dict.issue)}
+                          </span>
                       </div>
+
+                      {/* Body Section */}
+                      <div className="p-4">
+                          {/* Problem Description */}
+                          <p className="text-sm text-gray-300 mb-4 leading-relaxed font-light">
+                              {item.problem}
+                          </p>
+
+                          {/* Solution Action Button */}
+                          <div
+                            onClick={() => (status === 'ready' || status === 'analyzing') && toggleItem(item.id)}
+                            className={`
+                                relative overflow-hidden flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border
+                                ${
+                                  isDone
+                                      ? 'bg-green-500/10 border-green-500/20'
+                                      : isProcessingThis 
+                                        ? 'bg-purple-500/10 border-purple-500/20'
+                                        : item.checked
+                                            ? 'bg-[#252525] border-white/10 hover:bg-[#2a2a2a] hover:border-purple-500/30 shadow-sm'
+                                            : 'bg-[#1f1f1f] border-transparent opacity-70 hover:opacity-100'
+                                }
+                            `}
+                          >
+                            {/* Checkbox */}
+                            <div
+                              className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all
+                                    ${
+                                      isDone
+                                        ? 'bg-green-500 text-black scale-110'
+                                        : isProcessingThis
+                                          ? 'border-2 border-purple-500 border-t-transparent animate-spin'
+                                          : item.checked
+                                            ? 'bg-purple-600 text-white shadow-[0_0_10px_rgba(147,51,234,0.3)] scale-105'
+                                            : 'border-2 border-gray-600 group-hover:border-gray-400'
+                                    }
+                                `}
+                            >
+                              {(isDone || item.checked) && !isProcessingThis && (
+                                <CheckIcon className="w-3 h-3" />
+                              )}
+                            </div>
+
+                            {/* Solution Text */}
+                            <div className="flex-1">
+                              <p className={`text-sm font-medium transition-colors ${item.checked ? 'text-white' : 'text-gray-400'}`}>
+                                {item.solution}
+                              </p>
+                              {isProcessingThis && (
+                                <p className="text-xs text-purple-400 font-bold mt-1 animate-pulse">
+                                  {dict.processingStep}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                      </div>
+
+                      {/* Shimmer Effect for Analyzing */}
+                      {status === 'analyzing' && (
+                        <div style={{ position:'absolute', inset:0, pointerEvents:'none', background:'linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.03), rgba(255,255,255,0))', transform:'translateX(-100%)', animation:'shimmer 2s infinite' }} />
+                      )}
                     </motion.div>
                   );
                 })}

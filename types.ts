@@ -4,6 +4,7 @@ export interface PlanItem {
   problem: string;
   solution: string;
   engine: string;
+  category?: string;
   type: 'generative' | 'adjustment';
   checked: boolean;
   isCustom?: boolean;
