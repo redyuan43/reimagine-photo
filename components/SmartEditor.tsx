@@ -25,6 +25,14 @@ import { analyzeImage, editImage, urlToBlob } from '../services/gemini';
 import { PlanItem } from '../types';
 
 const MagicWandIcon = SparklesIcon;
+const BlinkingSmileIcon: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
+    <motion.circle cx="9.5" cy="9.75" r="0.9" fill="currentColor" style={{ transformOrigin: 'center' }} animate={{ scaleY: [1, 0.15, 1, 1, 1, 1] }} transition={{ duration: 1.8, repeat: Infinity, times: [0, 0.12, 0.24, 0.5, 0.6, 1] }} />
+    <motion.circle cx="14.5" cy="9.75" r="0.9" fill="currentColor" style={{ transformOrigin: 'center' }} animate={{ scaleY: [1, 1, 1, 1, 0.15, 1] }} transition={{ duration: 1.8, repeat: Infinity, times: [0, 0.5, 0.6, 0.72, 0.84, 1] }} />
+    <path d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
 interface SmartEditorProps {
   imagePreview: string | null;
@@ -495,7 +503,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
             <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full text-white text-sm font-medium flex items-center gap-2 border border-white/10 shadow-lg pointer-events-none">
             {status === 'analyzing' && (
                 <>
-                <ArrowPathIcon className="w-4 h-4 animate-spin" /> {dict.analyzing}
+                <BlinkingSmileIcon className="w-4 h-4 text-amber-400" /> {dict.analyzing}
                 </>
             )}
             {status === 'ready' && (
@@ -712,16 +720,16 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                                     ${
                                       isDone
                                         ? 'bg-amber-500 text-black scale-110'
-                                        : isProcessingThis
-                                          ? 'border-2 border-purple-500 border-t-transparent animate-spin'
-                                          : item.checked
+                                        : item.checked
                                             ? 'bg-purple-600 text-white shadow-[0_0_10px_rgba(147,51,234,0.3)] scale-105'
                                             : 'border-2 border-gray-600 group-hover:border-gray-400'
                                     }
                                 `}
                             >
-                              {(isDone || item.checked) && !isProcessingThis && (
-                                <CheckIcon className="w-3 h-3" />
+                              {isProcessingThis ? (
+                                <BlinkingSmileIcon className="w-3 h-3 text-purple-500" />
+                              ) : (
+                                (isDone || item.checked) && <CheckIcon className="w-3 h-3" />
                               )}
                             </div>
 
@@ -755,7 +763,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                     animate={{ opacity: 1 }} 
                     className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-[#181818]"
                   >
-                      <div className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                      <BlinkingSmileIcon className="w-5 h-5 text-purple-400" />
                       <span className="text-sm text-gray-300 font-medium animate-pulse">{dict.thinking}</span>
                   </motion.div>
               )}
@@ -819,7 +827,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                   >
                     {status === 'analyzing' ? (
                          <>
-                            <ArrowPathIcon className="w-5 h-5 animate-spin" /> {dict.analyzing}
+                            <BlinkingSmileIcon className="w-5 h-5 text-amber-400" /> {dict.analyzing}
                          </>
                     ) : (
                         <>
@@ -885,7 +893,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                     className="absolute right-2 top-1.5 p-1.5 text-white rounded-lg transition-colors bg-amber-500 hover:bg-amber-600 disabled:opacity-50"
                     >
                     {isProcessing ? (
-                        <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                        <BlinkingSmileIcon className="w-4 h-4 text-amber-400" />
                     ) : (
                         <PaperAirplaneIcon className="w-4 h-4" />
                     )}
