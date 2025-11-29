@@ -17,6 +17,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 import threading
+def _load_local_env():
+    paths = [Path('.local.env'), Path('.env.local')]
+    for p in paths:
+        if p.exists():
+            try:
+                with open(p, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        s = line.strip()
+                        if not s or s.startswith('#'):
+                            continue
+                        if '=' not in s:
+                            continue
+                        k, v = s.split('=', 1)
+                        os.environ[k.strip()] = v.strip().strip('"').strip("'")
+            except Exception:
+                pass
+
+_load_local_env()
+
 try:
     from openai import OpenAI
 except Exception:

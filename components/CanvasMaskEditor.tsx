@@ -574,7 +574,7 @@ export const CanvasMaskEditor: React.FC<CanvasMaskEditorProps> = ({
 
       {/* --- Annanote Toolbar --- */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50">
-          <div className="flex items-center bg-[#262626] rounded-full px-1.5 py-1 shadow-2xl border border-white/10 gap-1" style={{ transform: 'scale(0.5)', transformOrigin: 'center' }}>
+          <div className="flex items-center bg-[#262626] rounded-full px-1.5 py-1 shadow-2xl border border-white/10 gap-1" style={{ transform: 'scale(1)', transformOrigin: 'center' }}>
               
               <div className="p-1.5 text-zinc-500 cursor-grab">
                   <Squares2X2Icon className="w-4 h-4" />
