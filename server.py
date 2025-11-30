@@ -238,6 +238,55 @@ def _file_metadata(path: str) -> dict:
     except Exception:
         return {"path": path, "exists": False}
 
+def _load_image_from_bytes(data: bytes, filename: str):
+    try:
+        from PIL import Image as _Image
+    except Exception:
+        raise HTTPException(status_code=500, detail="Pillow not available on server")
+    name = (filename or "image").lower()
+    if any(name.endswith(ext) for ext in [".heic", ".heif"]):
+        try:
+            import pillow_heif as _pheif
+            heif = _pheif.read_heif(data)
+            return _Image.frombytes(heif.mode, heif.size, heif.data)
+        except Exception:
+            raise HTTPException(status_code=500, detail="HEIC support not available")
+    if any(name.endswith(ext) for ext in [".dng", ".raw", ".arw", ".cr2", ".nef", ".raf", ".orf", ".rw2"]):
+        try:
+            import rawpy as _rawpy
+            import numpy as _np
+            with _rawpy.imread(io.BytesIO(data)) as raw:
+                rgb = raw.postprocess(use_camera_wb=True, no_auto_bright=True, output_bps=8, gamma=(1, 1))
+            return _Image.fromarray(rgb)
+        except Exception:
+            raise HTTPException(status_code=500, detail="RAW support not available")
+    try:
+        return _Image.open(io.BytesIO(data)).convert('RGB')
+    except Exception:
+        raise HTTPException(status_code=400, detail="Unsupported image payload")
+
+def _pil_to_bytes(img, fmt: str, quality: int | None = None, compression: int | None = None):
+    buf = io.BytesIO()
+    f = (fmt or 'jpeg').lower()
+    if f == 'jpeg':
+        q = int(quality or 90)
+        img.save(buf, format='JPEG', quality=q, subsampling=0)
+        mime = 'image/jpeg'
+    elif f == 'png':
+        c = int(compression or 6)
+        img.save(buf, format='PNG', compress_level=c)
+        mime = 'image/png'
+    elif f == 'webp':
+        q = int(quality or 85)
+        img.save(buf, format='WEBP', quality=q)
+        mime = 'image/webp'
+    elif f == 'tiff':
+        img.save(buf, format='TIFF')
+        mime = 'image/tiff'
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported output format")
+    return buf.getvalue(), mime
+
 def _write_json_log(operation: str, input_path: str | None, output_urls: list[str] | None, params: dict | None, steps: list | None, summary: str | None, events: list[dict] | None, local_output_paths: Optional[list[str]] = None, record_id: Optional[int] = None) -> str:
     payload = {
         "timestamp": datetime.utcnow().isoformat(),
@@ -443,6 +492,28 @@ def get_record(record_id: int):
 def fetch_logs(lines: int = 200):
     lines = max(1, min(lines, 2000))
     return {"lines": _read_log_tail(lines)}
+
+@app.post("/preview")
+async def preview(image: UploadFile = File(...)):
+    payload = await image.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="No image payload")
+    img = _load_image_from_bytes(payload, image.filename or "image.bin")
+    try:
+        img.thumbnail((1600, 1600))
+    except Exception:
+        pass
+    data, mime = _pil_to_bytes(img, 'png')
+    return StreamingResponse(io.BytesIO(data), media_type=mime, headers={"Cache-Control": "no-cache"})
+
+@app.post("/convert")
+async def convert(image: UploadFile = File(...), format: str = Form("jpeg"), quality: int = Form(90), compression: int = Form(6)):
+    payload = await image.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="No image payload")
+    img = _load_image_from_bytes(payload, image.filename or "image.bin")
+    data, mime = _pil_to_bytes(img, format.lower(), quality, compression)
+    return StreamingResponse(io.BytesIO(data), media_type=mime, headers={"Cache-Control": "no-cache"})
 
 @app.get("/proxy_image")
 def proxy_image(url: str):

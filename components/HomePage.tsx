@@ -782,10 +782,26 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
           e.dataTransfer.clearData();
       }
   };
-  const handleFileSelect = (file: File) => {
-    if (file.type.startsWith('image/')) {
-        setSelectedFile(file);
-        setFilePreview(URL.createObjectURL(file));
+  const handleFileSelect = async (file: File) => {
+    const name = (file.name || '').toLowerCase();
+    const isImageMime = (file.type || '').startsWith('image/');
+    const isHeic = /\.(heic|heif)$/.test(name);
+    const isRaw = /\.(dng|raw|arw|cr2|nef|raf|orf|rw2)$/.test(name);
+    const isSpecial = isHeic || isRaw;
+    
+    setSelectedFile(file);
+    if (isImageMime && !isSpecial) {
+      setFilePreview(URL.createObjectURL(file));
+      return;
+    }
+    try {
+      const { getPreviewForUpload } = await import('../services/gemini');
+      const previewUrl = await getPreviewForUpload(file);
+      setFilePreview(previewUrl);
+      (window as any)._previewError = undefined;
+    } catch (e) {
+      setFilePreview('');
+      (window as any)._previewError = 'HEIC/RAW 预览需要后端依赖，请安装 pillow-heif/rawpy';
     }
   };
 
@@ -896,7 +912,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                                 ref={fileInputRef}
                                 onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
                                 className="hidden"
-                                accept="image/*"
+                                accept="image/*,.heic,.heif,.dng,.raw,.arw,.cr2,.nef,.raf,.orf,.rw2"
                              />
                              <button 
                                 onClick={() => fileInputRef.current?.click()}
@@ -944,7 +960,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
                  {/* Quick Prompts / Examples */}
                  {!promptText && (
-                    <div className="mt-4 flex justify-center">
+                    <div className="mt-4 flex justify中心">
                         <button 
                             onClick={() => setPromptText(dict.examplePrompt)}
                             className="text-xs text-white/40 hover:text-white/80 transition-colors flex items-center gap-2"
@@ -952,6 +968,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                             <span className="opacity-50">{dict.example}:</span>
                             <span>"{dict.examplePrompt}"</span>
                         </button>
+                    </div>
+                 )}
+                 {(!filePreview && selectedFile && (window as any)._previewError) && (
+                    <div className="mt-3 w-full text-center">
+                      <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg inline-block px-3 py-1">
+                        {(window as any)._previewError}
+                      </p>
                     </div>
                  )}
              </motion.div>

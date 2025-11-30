@@ -214,3 +214,30 @@ export const editImage = async (
     throw e;
   }
 };
+
+export const getPreviewForUpload = async (file: File): Promise<string> => {
+  const fd = new FormData();
+  fd.append('image', file);
+  const res = await fetch('http://localhost:8000/preview', { method: 'POST', body: fd });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(txt || `preview failed ${res.status}`);
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+};
+
+export const convertImage = async (
+  imageBlob: Blob,
+  format: 'jpeg' | 'png' | 'webp' | 'tiff',
+  opts: { quality?: number; compression?: number }
+): Promise<Blob> => {
+  const fd = new FormData();
+  fd.append('image', imageBlob, 'export.bin');
+  fd.append('format', format);
+  if (typeof opts.quality === 'number') fd.append('quality', String(opts.quality));
+  if (typeof opts.compression === 'number') fd.append('compression', String(opts.compression));
+  const res = await fetch('http://localhost:8000/convert', { method: 'POST', body: fd });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.blob();
+};
