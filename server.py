@@ -268,23 +268,49 @@ def _load_image_from_bytes(data: bytes, filename: str):
     except Exception:
         raise HTTPException(status_code=400, detail="Unsupported image payload")
 
-def _pil_to_bytes(img, fmt: str, quality: int | None = None, compression: int | None = None):
+def _pil_to_bytes(img, fmt: str, quality: int | None = None, compression: int | None = None, extra_info: dict | None = None):
     buf = io.BytesIO()
     f = (fmt or 'jpeg').lower()
     if f == 'jpeg':
         q = int(quality or 90)
-        img.save(buf, format='JPEG', quality=q, subsampling=0)
+        try:
+            img.save(buf, format='JPEG', quality=q, subsampling=0)
+        except Exception:
+            img.save(buf, format='JPEG', quality=q)
         mime = 'image/jpeg'
     elif f == 'png':
         c = int(compression or 6)
-        img.save(buf, format='PNG', compress_level=c)
+        try:
+            from PIL.PngImagePlugin import PngInfo
+            pi = PngInfo()
+            if extra_info:
+                for k, v in extra_info.items():
+                    try:
+                        pi.add_text(str(k), str(v))
+                    except Exception:
+                        pass
+            img.save(buf, format='PNG', compress_level=c, pnginfo=pi)
+        except Exception:
+            img.save(buf, format='PNG', compress_level=c)
         mime = 'image/png'
     elif f == 'webp':
         q = int(quality or 85)
         img.save(buf, format='WEBP', quality=q)
         mime = 'image/webp'
     elif f == 'tiff':
-        img.save(buf, format='TIFF')
+        try:
+            from PIL.TiffImagePlugin import ImageFileDirectory_v2
+            ifd = ImageFileDirectory_v2()
+            if extra_info:
+                desc = str(extra_info.get('Description') or '')
+                cr = str(extra_info.get('Copyright') or '')
+                if desc:
+                    ifd[270] = desc  # ImageDescription
+                if cr:
+                    ifd[33432] = cr  # Copyright
+            img.save(buf, format='TIFF', tiffinfo=ifd)
+        except Exception:
+            img.save(buf, format='TIFF')
         mime = 'image/tiff'
     else:
         raise HTTPException(status_code=400, detail="Unsupported output format")
@@ -526,12 +552,61 @@ async def preview(image: UploadFile = File(...)):
     return StreamingResponse(io.BytesIO(data), media_type=mime, headers={"Cache-Control": "no-cache"})
 
 @app.post("/convert")
-async def convert(image: UploadFile = File(...), format: str = Form("jpeg"), quality: int = Form(90), compression: int = Form(6)):
+async def convert(
+    image: UploadFile = File(...),
+    format: str = Form("jpeg"),
+    quality: int = Form(90),
+    compression: int = Form(6),
+    resize_w: int | None = Form(None),
+    resize_h: int | None = Form(None),
+    color: str = Form("RGB"),
+    copyright: str = Form(""),
+    metadata: str = Form("")
+):
     payload = await image.read()
     if not payload:
         raise HTTPException(status_code=400, detail="No image payload")
     img = _load_image_from_bytes(payload, image.filename or "image.bin")
-    data, mime = _pil_to_bytes(img, format.lower(), quality, compression)
+    try:
+        if resize_w and resize_h and resize_w > 0 and resize_h > 0:
+            img = img.resize((int(resize_w), int(resize_h)))
+    except Exception:
+        pass
+    try:
+        col = (color or "RGB").upper()
+        if col == "GRAY":
+            img = img.convert("L")
+        else:
+            img = img.convert("RGB")
+    except Exception:
+        pass
+
+    # Basic metadata embedding (best-effort)
+    info = {}
+    if isinstance(metadata, str) and metadata.strip():
+        try:
+            info["Description"] = metadata
+        except Exception:
+            pass
+    if isinstance(copyright, str) and copyright.strip():
+        try:
+            info["Copyright"] = copyright
+        except Exception:
+            pass
+
+    extra = {}
+    if isinstance(metadata, str) and metadata.strip():
+        try:
+            extra["Description"] = metadata
+        except Exception:
+            pass
+    if isinstance(copyright, str) and copyright.strip():
+        try:
+            extra["Copyright"] = copyright
+        except Exception:
+            pass
+
+    data, mime = _pil_to_bytes(img, format.lower(), quality, compression, extra_info=extra)
     return StreamingResponse(io.BytesIO(data), media_type=mime, headers={"Cache-Control": "no-cache"})
 
 @app.get("/proxy_image")

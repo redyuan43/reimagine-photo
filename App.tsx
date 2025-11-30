@@ -3,16 +3,18 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { HomePage } from './components/HomePage';
 import { SmartEditor } from './components/SmartEditor';
 import { DNALoader } from './components/DNALoader';
+import { DownloadPage } from './components/DownloadPage';
 import { checkAndRequestApiKey } from './services/gemini';
 
 export default function App() {
-  const [page, setPage] = useState<'home' | 'smartEditor'>('home');
+  const [page, setPage] = useState<'home' | 'smartEditor' | 'download'>('home');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [initialPrompt, setInitialPrompt] = useState('');
   const [startMode, setStartMode] = useState<'analyze' | 'direct'>('analyze');
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isLoadingKey, setIsLoadingKey] = useState(true);
+  const [downloadSourceUrl, setDownloadSourceUrl] = useState<string | null>(null);
   
   // Intro State
   const [showIntro, setShowIntro] = useState(true);
@@ -35,6 +37,19 @@ export default function App() {
     }, 2500); // 2.5s Intro
 
     return () => clearTimeout(introTimer);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const p = params.get('page');
+      if (p === 'download') {
+        const src = params.get('src');
+        const fallback = 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1600&q=90&auto=format&fit=crop';
+        setDownloadSourceUrl(src || fallback);
+        setPage('download');
+      }
+    } catch {}
   }, []);
 
   const handleStart = async (file: File, prompt: string = '', mode: 'analyze' | 'direct' = 'analyze') => {
@@ -77,6 +92,11 @@ export default function App() {
     setPage('home');
   };
 
+  const goToDownload = (srcUrl: string | null) => {
+    setDownloadSourceUrl(srcUrl);
+    setPage('download');
+  };
+
   return (
     <div className="bg-[#0b0b0c] font-sans overflow-hidden selection:bg-blue-200 selection:text-blue-900" style={{ minHeight: '100vh' }}>
       <AnimatePresence mode="wait">
@@ -117,7 +137,7 @@ export default function App() {
                           lang={lang} 
                           setLang={setLang} 
                       />
-                    ) : (
+                    ) : page === 'smartEditor' ? (
                       <SmartEditor
                         imagePreview={imagePreview}
                         imageFile={imageFile}
@@ -125,6 +145,12 @@ export default function App() {
                         onReset={handleReset}
                         lang={lang}
                         startMode={startMode}
+                        onGoToDownload={(url) => goToDownload(url)}
+                      />
+                    ) : (
+                      <DownloadPage
+                        sourceUrl={downloadSourceUrl}
+                        onBack={() => setPage('smartEditor')}
                       />
                     )}
                   </motion.div>

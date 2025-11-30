@@ -33,6 +33,7 @@ interface SmartEditorProps {
   onReset: () => void;
   lang: 'zh' | 'en';
   startMode?: 'analyze' | 'direct';
+  onGoToDownload?: (url: string | null) => void;
 }
 
 export const SmartEditor: React.FC<SmartEditorProps> = ({
@@ -41,7 +42,8 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   initialPrompt = '',
   onReset,
   lang,
-  startMode = 'analyze'
+  startMode = 'analyze',
+  onGoToDownload,
 }) => {
   const [status, setStatus] = useState<'analyzing' | 'ready' | 'executing' | 'completed'>('analyzing');
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
@@ -654,13 +656,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
             </h2>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  if (!showDownloadOptions) {
-                    setShowDownloadOptions(true);
-                  } else {
-                    handleConvertAndDownload();
-                  }
-                }}
+                onClick={() => onGoToDownload?.(currentDisplayImage || imagePreview)}
                 title={dict.downloadResult}
                 className="p-2 rounded-full bg-amber-500 hover:bg-amber-600 text-black border border-amber-400 shadow-sm"
               >
