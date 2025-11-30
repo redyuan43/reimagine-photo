@@ -632,10 +632,19 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
     const uniforms = {
       iTime: { value: 0 },
-      iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      iResolution: { value: new THREE.Vector2(0, 0) },
       iCamPos: { value: new THREE.Vector3() },
       iCamTarget: { value: new THREE.Vector3(0, 0, 0) },
     };
+
+    const updateResolution = () => {
+      const size = new THREE.Vector2();
+      renderer.getSize(size);
+      const ratio = renderer.getPixelRatio();
+      uniforms.iResolution.value.set(size.x * ratio, size.y * ratio);
+    };
+
+    updateResolution();
 
     const geometry = new THREE.PlaneGeometry(2, 2);
     const material = new THREE.ShaderMaterial({ vertexShader: VERTEX_SHADER, fragmentShader: FRAGMENT_SHADER, uniforms, transparent: true });
@@ -651,7 +660,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
     const onResize = () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
-      uniforms.iResolution.value.set(window.innerWidth, window.innerHeight);
+      updateResolution();
     };
     const onMouseDown = (e: MouseEvent) => { isDragging = true; lastX = e.clientX; lastY = e.clientY; };
     const onMouseUp = () => { isDragging = false; };
