@@ -805,8 +805,9 @@ async def magic_edit(
             negative_prompt=negative_prompt or " ",
             prompt_extend=prompt_extend,
         )
-        if n == 1 and size:
-            kwargs["size"] = size
+        size_used = _normalize_size_param(size, n)
+        if size_used:
+            kwargs["size"] = size_used
 
         resp = MultiModalConversation.call(**kwargs)
         if getattr(resp, "status_code", None) == 200:
@@ -828,7 +829,7 @@ async def magic_edit(
                 params = {
                     "model": model,
                     "n": n,
-                    "size": size,
+                    "size": size_used or size,
                     "watermark": watermark,
                     "negative_prompt": negative_prompt,
                     "prompt_extend": prompt_extend,
@@ -1018,3 +1019,21 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
         "X-Accel-Buffering": "no",
     }
     return StreamingResponse(gen(), media_type="text/event-stream", headers=headers)
+def _normalize_size_param(size: str, n: int) -> Optional[str]:
+    try:
+        if n != 1:
+            return None
+        s = (size or "").strip()
+        if not s:
+            return None
+        if "*" not in s:
+            return "2048*2048"
+        parts = s.split("*")
+        w = int(parts[0])
+        h = int(parts[1])
+        if w < 512 or h < 512 or w > 2048 or h > 2048:
+            logger.info("magic_edit 归一化输出尺寸 %s -> 2048*2048", s)
+            return "2048*2048"
+        return s
+    except Exception:
+        return "2048*2048"
