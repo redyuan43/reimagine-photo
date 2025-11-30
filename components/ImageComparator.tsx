@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, useMotionValue, useTransform } from 'framer-motion';
 import { ChevronDoubleRightIcon } from '@heroicons/react/24/outline';
+import { BlinkingSmileIcon } from './DNALoader';
 
 interface ImageComparatorProps {
   originalImage: string | null;
@@ -170,12 +171,7 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
     >
       {!isLoaded && (
         <div className="absolute inset-0 flex items-center justify-center z-30">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-10 h-10 text-white/80">
-            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
-            <motion.circle cx="9.5" cy="9.75" r="1.1" fill="currentColor" style={{ transformOrigin: 'center' }} animate={{ scaleY: [1, 0.15, 1] }} transition={{ duration: 1.6, repeat: Infinity }} />
-            <motion.circle cx="14.5" cy="9.75" r="1.1" fill="currentColor" style={{ transformOrigin: 'center' }} animate={{ scaleY: [1, 1, 0.15, 1] }} transition={{ duration: 1.6, repeat: Infinity }} />
-            <path d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <BlinkingSmileIcon className="w-10 h-10 text-white/80" />
         </div>
       )}
       <div

@@ -1,6 +1,7 @@
 
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { BlinkingSmileIcon } from './DNALoader';
 import { PhotoIcon, PaperAirplaneIcon, ArrowUpTrayIcon, HandThumbUpIcon, StarIcon, BoltIcon, FaceSmileIcon } from '@heroicons/react/24/outline';
 import * as THREE from 'three';
 
@@ -927,7 +928,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                                  <BlinkingSmileIcon className="w-8 h-8 text-amber-600" />
                                </div>
                              )}
-                             {!isLoading && <FaceSmileIcon className="w-6 h-6" />}
+                             {!isLoading && <BlinkingSmileIcon className="w-6 h-6" />}
                          </button>
                      </div>
                  </div>
@@ -972,11 +973,4 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
     </div>
   );
 };
-  const BlinkingSmileIcon: React.FC<{ className?: string }> = ({ className = '' }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
-      <motion.circle cx="9.5" cy="9.75" r="0.9" fill="currentColor" style={{ transformOrigin: 'center' }} animate={{ scaleY: [1, 0.15, 1, 1, 1, 1] }} transition={{ duration: 1.8, repeat: Infinity, times: [0, 0.12, 0.24, 0.5, 0.6, 1] }} />
-      <motion.circle cx="14.5" cy="9.75" r="0.9" fill="currentColor" style={{ transformOrigin: 'center' }} animate={{ scaleY: [1, 1, 1, 1, 0.15, 1] }} transition={{ duration: 1.8, repeat: Infinity, times: [0, 0.5, 0.6, 0.72, 0.84, 1] }} />
-      <path d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  
