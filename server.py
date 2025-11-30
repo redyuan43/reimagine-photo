@@ -5,6 +5,7 @@ import tempfile
 import requests
 import time
 import logging
+import io
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -45,7 +46,22 @@ except Exception:
 try:
     import dashscope
     from dashscope import MultiModalConversation
-    dashscope.base_http_api_url = os.getenv("IMAGE_EDIT_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1")
+    def _normalize_endpoint(v: str) -> str:
+        try:
+            v = (v or "").strip()
+            if not v:
+                return "https://dashscope.aliyuncs.com/api/v1"
+            # If user provided a full service path, truncate to /api/v1
+            if "/api/v1" in v:
+                base = v.split("/api/v1", 1)[0] + "/api/v1"
+                return base
+            # Fallback: accept host root and append /api/v1
+            if v.endswith("/"):
+                v = v[:-1]
+            return v + "/api/v1"
+        except Exception:
+            return "https://dashscope.aliyuncs.com/api/v1"
+    dashscope.base_http_api_url = _normalize_endpoint(os.getenv("IMAGE_EDIT_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1"))
 except Exception:
     MultiModalConversation = None
 
@@ -397,6 +413,19 @@ def fetch_logs(lines: int = 200):
     lines = max(1, min(lines, 2000))
     return {"lines": _read_log_tail(lines)}
 
+@app.get("/proxy_image")
+def proxy_image(url: str):
+    if not isinstance(url, str) or not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="invalid url")
+    try:
+        r = requests.get(url, timeout=30)
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"fetch failed {r.status_code}")
+        ct = r.headers.get("content-type") or "application/octet-stream"
+        return StreamingResponse(io.BytesIO(r.content), media_type=ct, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
 
 @app.post("/records/{record_id}/images", response_model=RecordImageModel)
 async def upload_record_image(
@@ -704,7 +733,6 @@ async def magic_edit(
     watermark: bool = Form(False),
     negative_prompt: str = Form(""),
     prompt_extend: bool = Form(True),
-    mask: UploadFile | None = File(None)
 ):
     if MultiModalConversation is None:
         raise HTTPException(status_code=500, detail="dashscope SDK not available on server")
@@ -713,26 +741,21 @@ async def magic_edit(
         raise HTTPException(status_code=500, detail="DASHSCOPE_API_KEY not configured")
 
     payload = await image.read()
+    logger.info("magic_edit received bytes=%d", len(payload or b""))
     if not payload:
         raise HTTPException(status_code=400, detail="No image payload")
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=Path(image.filename or "image").suffix or ".png")
     tmp.write(payload)
     tmp.flush(); tmp.close()
 
-    mask_tmp_path = None
-    if mask is not None:
-        mask_bytes = await mask.read()
-        mt = tempfile.NamedTemporaryFile(delete=False, suffix=Path(mask.filename or "mask").suffix or ".png")
-        mt.write(mask_bytes); mt.flush(); mt.close()
-        mask_tmp_path = mt.name
 
     try:
         data_url = _encode_image_to_data_url(tmp.name)
         contents: list[dict] = [{"image": data_url}]
+        logger.info("magic_edit prompt len=%d", len(prompt or ""))
+        print("magic_edit 提示词:", prompt)
         if prompt:
             contents.append({"text": prompt})
-        if mask_tmp_path:
-            contents.append({"image": _encode_image_to_data_url(mask_tmp_path)})
         messages = [{"role": "user", "content": contents}]
 
         model = os.getenv("IMAGE_EDIT_MODEL", "qwen-image-edit-plus")
@@ -769,7 +792,6 @@ async def magic_edit(
                     "negative_prompt": negative_prompt,
                     "prompt_extend": prompt_extend,
                     "endpoint": os.getenv("IMAGE_EDIT_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1"),
-                    "has_mask": bool(mask_tmp_path),
                 }
                 steps = [{"text": prompt}] if prompt else []
                 events = [
@@ -780,17 +802,16 @@ async def magic_edit(
             except Exception as exc:
                 logger.warning("magic_edit 写日志失败: %s", exc)
             return {"urls": urls}
+        try:
+            logger.error("magic_edit error status=%s code=%s message=%s", getattr(resp, "status_code", None), getattr(resp, "code", None), getattr(resp, "message", None))
+        except Exception:
+            pass
         raise HTTPException(status_code=getattr(resp, "status_code", 500), detail=getattr(resp, "message", "image edit failed"))
     finally:
         try:
             os.unlink(tmp.name)
         except Exception:
             pass
-        if mask_tmp_path:
-            try:
-                os.unlink(mask_tmp_path)
-            except Exception:
-                pass
 
 @app.post("/analyze_stream")
 async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):

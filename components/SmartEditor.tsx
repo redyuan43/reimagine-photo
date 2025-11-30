@@ -366,7 +366,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         else if (status !== 'completed') setStatus('ready');
         else setStatus('completed');
         
-        alert("Generation failed. Please try again.");
+        setErrorMessage('生成失败，请稍后重试');
     } finally {
         setIsProcessing(false);
     }
@@ -414,7 +414,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           }
       } catch (e) {
           console.error(e);
-          alert("Masked edit failed.");
+          setErrorMessage('遮罩编辑失败，请稍后重试');
           if (isInitial) setStatus('ready'); // Revert status if failed
       } finally {
           setIsProcessing(false);
@@ -433,6 +433,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         }
     } catch (e) {
         console.error("Upscale failed", e);
+        setErrorMessage('超分失败，请稍后重试');
     } finally {
         setIsUpscaling(false);
     }
@@ -442,6 +443,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       setCurrentMaskBlob(null);
       setIsMaskingMode(true);
   };
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const getActiveIndex = (itemId: string) => {
     const activeSteps = planItems.filter((item) => item.checked);
@@ -623,6 +625,12 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         </div>
 
         <div ref={rightPaneRef} className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+            {errorMessage && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-4 p-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 flex items-center justify-between">
+                <span className="text-sm">{errorMessage}</span>
+                <button onClick={() => setErrorMessage(null)} className="px-2 py-1 text-xs rounded bg-red-500/20 hover:bg-red-500/30">关闭</button>
+              </motion.div>
+            )}
             {/* Step List */}
             <div className="grid grid-cols-1 gap-4">
               <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>

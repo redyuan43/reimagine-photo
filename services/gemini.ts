@@ -54,7 +54,9 @@ export const checkAndRequestApiKey = async (): Promise<boolean> => {
 
 // --- Helper (Unchanged) ---
 export const urlToBlob = async (url: string): Promise<Blob> => {
-  const res = await fetch(url);
+  const isHttp = /^https?:\/\//i.test(url);
+  const proxied = isHttp ? `http://localhost:8000/proxy_image?url=${encodeURIComponent(url)}` : url;
+  const res = await fetch(proxied);
   return await res.blob();
 };
 
@@ -124,7 +126,6 @@ export const editImage = async (
   activeSteps: PlanItem[],
   userInstruction: string,
   resolution: '1K' | '2K' | '4K' = '1K',
-  maskBlob?: Blob,
   filename: string = "image.png"
 ): Promise<string | null> => {
   const getImageSize = (blob: Blob): Promise<{ w: number; h: number }> => new Promise((resolve) => {
@@ -145,6 +146,7 @@ export const editImage = async (
 
   try {
     const fd = new FormData();
+    console.log('Uploading image blob size:', (imageBlob as any)?.size ?? 'unknown');
     fd.append('image', imageBlob, filename);
 
     const typeWeight = (t?: string) => {
@@ -191,6 +193,7 @@ export const editImage = async (
     }
     const combinedSteps = lines.join('\n');
     const finalPrompt = [userInstruction?.trim(), combinedSteps].filter(Boolean).join('\n');
+    console.log("Qwen Image Edit Prompt:", finalPrompt);
     fd.append('prompt', finalPrompt);
 
     fd.append('n', '1');
@@ -198,19 +201,16 @@ export const editImage = async (
     fd.append('size', `${w}*${h}`);
     fd.append('watermark', 'false');
     fd.append('prompt_extend', 'true');
-    if (maskBlob) {
-      fd.append('mask', maskBlob, 'mask.png');
-    }
     const res = await fetch('http://localhost:8000/magic_edit', { method: 'POST', body: fd });
     if (res.ok) {
       const data = await res.json() as { urls?: string[] };
       const url = (data.urls && data.urls[0]) || null;
+      if (!url) throw new Error('No URLs returned');
       return url;
     }
-    console.warn('magic_edit failed', res.status, await res.text());
+    const txt = await res.text();
+    throw new Error(`magic_edit failed ${res.status}: ${txt}`);
   } catch (e) {
-    console.warn('Backend magic_edit failed, falling back to mock.', e);
+    throw e;
   }
-  const mockResult = `https://picsum.photos/seed/${Date.now()}/1024/768`;
-  return mockResult;
 };
