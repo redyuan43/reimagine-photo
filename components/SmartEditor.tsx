@@ -45,8 +45,12 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [userInput, setUserInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isUpscaling, setIsUpscaling] = useState(false);
-  const [isHighRes, setIsHighRes] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'jpeg'|'png'|'webp'|'tiff'>('jpeg');
+  const [exportQuality, setExportQuality] = useState(90);
+  const [exportCompression, setExportCompression] = useState(6);
+  const [isConverting, setIsConverting] = useState(false);
+  const [convertProgress, setConvertProgress] = useState(0);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [currentActiveStepIndex, setCurrentActiveStepIndex] = useState(-1);
   
   // History Management
@@ -77,8 +81,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         confirm: 'Confirm Edits',
         processing: 'Processing Edits...',
         done: 'Done.',
-        upscaling: 'Upscaling to 4K...',
-        hdrReady: '4K HDR Ready',
+        exporting: 'Exporting...',
         addCustom: 'Add custom requirement...',
         generate: 'Generate Magic Edit',
         crafting: 'Crafting your masterpiece...',
@@ -88,11 +91,11 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         placeholderEdit: 'E.g., Make the sky bluer...',
         placeholderMask: 'Describe your annotation (Optional)...',
         maskTip: 'Use the toolbar on the image to draw and submit.',
-        magicUpscale: '✨ Magic 4K Upscale',
-        upscalingBtn: 'Upscaling...',
-        enhanced: '4K Enhanced',
-        download4k: 'Download 4K',
-        downloadResult: 'Download Result',
+        downloadResult: 'Download',
+        format: 'Format',
+        quality: 'Quality',
+        compression: 'Compression',
+        formatHelp: 'JPEG: small, photos · PNG: lossless · WEBP: high compression · TIFF: pro',
         smartAssistant: 'Smart Assistant',
         newUpload: 'New Upload',
         addBack: 'Add Back',
@@ -109,8 +112,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         confirm: '确认编辑',
         processing: '正在处理编辑...',
         done: '完成',
-        upscaling: '正在进行4K超分...',
-        hdrReady: '4K HDR 就绪',
+        exporting: '正在导出...',
         addCustom: '添加自定义需求...',
         generate: '生成魔法编辑',
         crafting: '正在打造您的杰作...',
@@ -120,11 +122,11 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         placeholderEdit: '例如：让天空更蓝...',
         placeholderMask: '描述您的标注（可选）...',
         maskTip: '使用图片上的工具栏进行绘制并提交。',
-        magicUpscale: '✨ 魔法 4K 超分',
-        upscalingBtn: '超分中...',
-        enhanced: '4K 已增强',
-        download4k: '下载 4K',
-        downloadResult: '下载结果',
+        downloadResult: '下载',
+        format: '格式',
+        quality: '质量',
+        compression: '压缩',
+        formatHelp: 'JPEG：体积小，适合照片 · PNG：无损 · WEBP：高压缩 · TIFF：专业无损',
         smartAssistant: '智能助手',
         newUpload: '重新上传',
         addBack: '加回',
@@ -335,6 +337,21 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     }
 
     if (!sourceBlob) return;
+    let sendName = 'image.png';
+    try {
+      const name = (imageFile?.name || '').toLowerCase();
+      if (sourceBlob === imageFile && /\.(heic|heif)$/.test(name)) {
+        const { convertHeicClientBlob } = await import('../services/gemini');
+        sourceBlob = await convertHeicClientBlob(imageFile);
+        sendName = 'image.jpg';
+      } else if (/\.(jpg|jpeg)$/.test(name)) {
+        sendName = imageFile?.name || 'image.jpg';
+      } else if (/\.(png|webp)$/.test(name)) {
+        sendName = 'image.png';
+      } else if (/\.(dng|raw|arw|cr2|nef|raf|orf|rw2)$/.test(name)) {
+        sendName = 'image.jpg';
+      }
+    } catch (e) {}
 
     setStatus('executing');
     setCurrentActiveStepIndex(0);
@@ -350,13 +367,14 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     }, 2000); 
 
     try {
-        const resultUrl = await editImage(sourceBlob, activeSteps, instruction);
+        const resultUrl = await editImage(sourceBlob, activeSteps, instruction, '1K', sendName);
         
         clearInterval(progressInterval);
         
         if (resultUrl) {
             addToHistory(resultUrl);
             setIsHighRes(false);
+            setErrorMessage(null);
         }
         setStatus('completed');
         setCurrentActiveStepIndex(-1);
@@ -366,7 +384,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         else if (status !== 'completed') setStatus('ready');
         else setStatus('completed');
         
-        alert("Generation failed. Please try again.");
+        setErrorMessage('生成失败，请稍后重试');
     } finally {
         setIsProcessing(false);
     }
@@ -402,7 +420,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           };
           setPlanItems(prev => [...prev, maskStep]);
           
-          const resultUrl = await editImage(baseImageBlob, activeSteps, prompt, '1K', currentMaskBlob);
+          const resultUrl = await editImage(baseImageBlob, activeSteps, prompt, '1K', 'image.png');
           
           if (resultUrl) {
               addToHistory(resultUrl);
@@ -411,30 +429,37 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
               setCurrentMaskBlob(null);
               setUserInput('');
               setStatus('completed'); // Ensure we land in completed state
+              setErrorMessage(null);
           }
       } catch (e) {
           console.error(e);
-          alert("Masked edit failed.");
+          setErrorMessage('遮罩编辑失败，请稍后重试');
           if (isInitial) setStatus('ready'); // Revert status if failed
       } finally {
           setIsProcessing(false);
       }
   };
 
-  const handleUpscale = async () => {
+  const handleConvertAndDownload = async () => {
     if (!currentDisplayImage) return;
-    setIsUpscaling(true);
     try {
-        const blob = await urlToBlob(currentDisplayImage);
-        const upscaledUrl = await editImage(blob, [], "", '4K');
-        if (upscaledUrl) {
-            addToHistory(upscaledUrl);
-            setIsHighRes(true);
-        }
+      setIsConverting(true);
+      setConvertProgress(5);
+      const timer = setInterval(() => {
+        setConvertProgress((p) => Math.min(95, p + Math.floor(Math.random()*7+3)));
+      }, 250);
+      const blob = await urlToBlob(currentDisplayImage);
+      const { convertImage } = await import('../services/gemini');
+      const outBlob = await convertImage(blob, exportFormat, { quality: exportQuality, compression: exportCompression });
+      clearInterval(timer);
+      setConvertProgress(100);
+      const url = URL.createObjectURL(outBlob);
+      setDownloadUrl(url);
     } catch (e) {
-        console.error("Upscale failed", e);
+      setErrorMessage('导出失败，请稍后重试');
     } finally {
-        setIsUpscaling(false);
+      setIsConverting(false);
+      setTimeout(() => setConvertProgress(0), 800);
     }
   };
 
@@ -442,6 +467,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       setCurrentMaskBlob(null);
       setIsMaskingMode(true);
   };
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const getActiveIndex = (itemId: string) => {
     const activeSteps = planItems.filter((item) => item.checked);
@@ -508,19 +534,14 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                 <CpuChipIcon className="w-4 h-4 animate-pulse text-blue-400" /> {dict.processing}
                 </>
             )}
-            {status === 'completed' && !isUpscaling && !isHighRes && (
+            {status === 'completed' && !isConverting && (
                 <>
                 <CheckCircleIcon className="w-4 h-4 text-amber-400" /> {dict.done}
                 </>
             )}
-            {isUpscaling && (
+            {isConverting && (
                 <>
-                <ArrowsPointingOutIcon className="w-4 h-4 animate-pulse text-yellow-400" /> {dict.upscaling}
-                </>
-            )}
-            {isHighRes && (
-                <>
-                <SparklesIcon className="w-4 h-4 text-amber-400" /> {dict.hdrReady}
+                <CpuChipIcon className="w-4 h-4 animate-pulse text-blue-400" /> {dict.exporting}
                 </>
             )}
             </div>
@@ -578,12 +599,12 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
 
         {/* --- Processing Overlay (DNALoader) --- */}
         <AnimatePresence>
-          {(status === 'executing' || isUpscaling || (isProcessing && isMaskingMode)) && (
+          {(status === 'executing' || isConverting || (isProcessing && isMaskingMode)) && (
              <DNALoader 
                 embedded 
                 text={
-                    isUpscaling 
-                    ? dict.upscaling 
+                    isConverting 
+                    ? dict.exporting 
                     : isMaskingMode 
                         ? dict.applyingEdits 
                         : dict.crafting
@@ -623,6 +644,12 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         </div>
 
         <div ref={rightPaneRef} className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+            {errorMessage && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-4 p-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 flex items-center justify-between">
+                <span className="text-sm">{errorMessage}</span>
+                <button onClick={() => setErrorMessage(null)} className="px-2 py-1 text-xs rounded bg-red-500/20 hover:bg-red-500/30">关闭</button>
+              </motion.div>
+            )}
             {/* Step List */}
             <div className="grid grid-cols-1 gap-4">
               <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
@@ -905,34 +932,49 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                 </div>
               )}
 
-              <div className="flex flex-col gap-2 mt-2">
+              <div className="flex flex-col gap-3 mt-2">
                 {!isMaskingMode && (
-                    <>
-                        {!isHighRes ? (
-                        <button
-                            onClick={handleUpscale}
-                            disabled={isUpscaling || isProcessing}
-                            className="w-full py-3 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70"
-                        >
-                            <ArrowsPointingOutIcon className="w-5 h-5" />
-                            {isUpscaling ? dict.upscalingBtn : dict.magicUpscale}
-                        </button>
-                        ) : (
-                        <div className="w-full py-3 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-xl font-medium flex items-center justify-center gap-2">
-                            <CheckIcon className="w-5 h-5" /> {dict.enhanced}
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <label className="text-xs text-gray-300 mb-1 block">{dict.format}</label>
+                        <select value={exportFormat} onChange={(e)=>setExportFormat(e.target.value as any)} className="w-full bg-[#181818] border border-white/10 rounded-xl text-sm text-gray-200 px-3 py-2">
+                          <option value="jpeg">JPEG</option>
+                          <option value="png">PNG</option>
+                          <option value="webp">WEBP</option>
+                          <option value="tiff">TIFF</option>
+                        </select>
+                        <p className="text-xs text-gray-400 mt-1">{dict.formatHelp}</p>
+                      </div>
+                      {exportFormat !== 'png' && exportFormat !== 'tiff' && (
+                        <div>
+                          <label className="text-xs text-gray-300 mb-1 block">{dict.quality} {exportQuality}</label>
+                          <input type="range" min={60} max={100} value={exportQuality} onChange={(e)=>setExportQuality(parseInt(e.target.value))} className="w-full" />
                         </div>
-                        )}
-
-                        <div className="flex gap-3">
-                        <a
-                            href={currentDisplayImage || ''}
-                            download="magic-result.png"
-                            className="w-full flex items-center justify-center py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium transition-colors shadow-lg"
-                        >
-                            {isHighRes ? dict.download4k : dict.downloadResult}
-                        </a>
+                      )}
+                      {exportFormat === 'png' && (
+                        <div>
+                          <label className="text-xs text-gray-300 mb-1 block">{dict.compression} {exportCompression}</label>
+                          <input type="range" min={0} max={9} value={exportCompression} onChange={(e)=>setExportCompression(parseInt(e.target.value))} className="w-full" />
                         </div>
-                    </>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleConvertAndDownload}
+                      disabled={isConverting || isProcessing}
+                      className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium transition-colors shadow-lg flex items-center justify-center gap-2 disabled:opacity-70"
+                    >
+                      <ArrowDownTrayIcon className="w-5 h-5" /> {dict.downloadResult}
+                    </button>
+                    {isConverting && (
+                      <div className="w-full h-2 rounded bg-white/10 overflow-hidden">
+                        <div className="h-2 bg-blue-500" style={{ width: `${convertProgress}%` }} />
+                      </div>
+                    )}
+                    {downloadUrl && (
+                      <a href={downloadUrl} download={`export.${exportFormat==='jpeg'?'jpg':exportFormat}`} className="text-xs text-blue-300 underline">点击下载导出文件</a>
+                    )}
+                  </>
                 )}
               </div>
             </div>

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, useMotionValue, useTransform } from 'framer-motion';
 import { ChevronDoubleRightIcon } from '@heroicons/react/24/outline';
-import { BlinkingSmileIcon } from './DNALoader';
+ 
 
 interface ImageComparatorProps {
   originalImage: string | null;
@@ -170,9 +170,7 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
       onTouchEnd={onTouchEnd}
     >
       {!isLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center z-30">
-          <BlinkingSmileIcon className="w-10 h-10 text-white/80" />
-        </div>
+        <div className="absolute inset-0 flex items-center justify-center z-30" />
       )}
       <div
         className="absolute inset-0"

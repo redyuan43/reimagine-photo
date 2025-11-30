@@ -632,10 +632,19 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
     const uniforms = {
       iTime: { value: 0 },
-      iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      iResolution: { value: new THREE.Vector2(0, 0) },
       iCamPos: { value: new THREE.Vector3() },
       iCamTarget: { value: new THREE.Vector3(0, 0, 0) },
     };
+
+    const updateResolution = () => {
+      const size = new THREE.Vector2();
+      renderer.getSize(size);
+      const ratio = renderer.getPixelRatio();
+      uniforms.iResolution.value.set(size.x * ratio, size.y * ratio);
+    };
+
+    updateResolution();
 
     const geometry = new THREE.PlaneGeometry(2, 2);
     const material = new THREE.ShaderMaterial({ vertexShader: VERTEX_SHADER, fragmentShader: FRAGMENT_SHADER, uniforms, transparent: true });
@@ -651,7 +660,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
     const onResize = () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
-      uniforms.iResolution.value.set(window.innerWidth, window.innerHeight);
+      updateResolution();
     };
     const onMouseDown = (e: MouseEvent) => { isDragging = true; lastX = e.clientX; lastY = e.clientY; };
     const onMouseUp = () => { isDragging = false; };
@@ -769,14 +778,38 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
       dragCounter.current = 0;
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
           const file = e.dataTransfer.files[0];
-          handleFileSelect(file);
+          if (file) handleFileSelect(file);
           e.dataTransfer.clearData();
       }
   };
-  const handleFileSelect = (file: File) => {
-    if (file.type.startsWith('image/')) {
-        setSelectedFile(file);
-        setFilePreview(URL.createObjectURL(file));
+  const handleFileSelect = async (file?: File | null) => {
+    if (!file) return;
+    const name = (file.name || '').toLowerCase();
+    const isImageMime = (file.type || '').startsWith('image/');
+    const isHeic = /\.(heic|heif)$/.test(name);
+    const isRaw = /\.(dng|raw|arw|cr2|nef|raf|orf|rw2)$/.test(name);
+    const isSpecial = isHeic || isRaw;
+    
+    setSelectedFile(file);
+    if (isImageMime && !isSpecial) {
+      setFilePreview(URL.createObjectURL(file));
+      return;
+    }
+    try {
+      if (isHeic) {
+        const { convertHeicClient } = await import('../services/gemini');
+        const previewUrl = await convertHeicClient(file);
+        setFilePreview(previewUrl);
+        (window as any)._previewError = undefined;
+        return;
+      }
+      const { getPreviewForUpload } = await import('../services/gemini');
+      const previewUrl = await getPreviewForUpload(file);
+      setFilePreview(previewUrl);
+      (window as any)._previewError = undefined;
+    } catch (e) {
+      setFilePreview('');
+      (window as any)._previewError = 'HEIC/RAW 预览需要后端依赖，请安装 pillow-heif/rawpy';
     }
   };
 
@@ -885,9 +918,12 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                              <input 
                                 type="file" 
                                 ref={fileInputRef}
-                                onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
+                                onChange={(e) => {
+                                  const f = e.target.files?.item(0);
+                                  if (f) handleFileSelect(f);
+                                }}
                                 className="hidden"
-                                accept="image/*"
+                                accept="image/*,.heic,.heif,.dng,.raw,.arw,.cr2,.nef,.raf,.orf,.rw2"
                              />
                              <button 
                                 onClick={() => fileInputRef.current?.click()}
@@ -935,7 +971,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
                  {/* Quick Prompts / Examples */}
                  {!promptText && (
-                    <div className="mt-4 flex justify-center">
+                    <div className="mt-4 flex justify中心">
                         <button 
                             onClick={() => setPromptText(dict.examplePrompt)}
                             className="text-xs text-white/40 hover:text-white/80 transition-colors flex items-center gap-2"
@@ -943,6 +979,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                             <span className="opacity-50">{dict.example}:</span>
                             <span>"{dict.examplePrompt}"</span>
                         </button>
+                    </div>
+                 )}
+                 {(!filePreview && selectedFile && (window as any)._previewError) && (
+                    <div className="mt-3 w-full text-center">
+                      <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg inline-block px-3 py-1">
+                        {(window as any)._previewError}
+                      </p>
                     </div>
                  )}
              </motion.div>

@@ -5,6 +5,7 @@ import tempfile
 import requests
 import time
 import logging
+import io
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -45,7 +46,22 @@ except Exception:
 try:
     import dashscope
     from dashscope import MultiModalConversation
-    dashscope.base_http_api_url = os.getenv("IMAGE_EDIT_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1")
+    def _normalize_endpoint(v: str) -> str:
+        try:
+            v = (v or "").strip()
+            if not v:
+                return "https://dashscope.aliyuncs.com/api/v1"
+            # If user provided a full service path, truncate to /api/v1
+            if "/api/v1" in v:
+                base = v.split("/api/v1", 1)[0] + "/api/v1"
+                return base
+            # Fallback: accept host root and append /api/v1
+            if v.endswith("/"):
+                v = v[:-1]
+            return v + "/api/v1"
+        except Exception:
+            return "https://dashscope.aliyuncs.com/api/v1"
+    dashscope.base_http_api_url = _normalize_endpoint(os.getenv("IMAGE_EDIT_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1"))
 except Exception:
     MultiModalConversation = None
 
@@ -83,6 +99,9 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger("reimagine")
+
+from starlette.staticfiles import StaticFiles
+app.mount("/static", StaticFiles(directory=str(IMAGES_DIR)), name="static")
 
 
 class RecordModel(BaseModel):
@@ -187,6 +206,26 @@ def _save_image_bytes(filename: str, data: bytes) -> str:
     logger.info("Saved image to %s (%d bytes)", dest_path, len(data))
     return str(dest_path)
 
+def _download_and_save_image(url: str) -> Optional[str]:
+    try:
+        r = requests.get(url, timeout=60)
+        if r.status_code != 200:
+            logger.warning("下载输出失败 status=%s url=%s", r.status_code, url)
+            return None
+        ct = r.headers.get("content-type") or "image/png"
+        ext = ".png"
+        try:
+            guess = mimetypes.guess_extension(ct.split(";")[0].strip())
+            if guess:
+                ext = guess
+        except Exception:
+            pass
+        name = f"output{ext}"
+        return _save_image_bytes(name, r.content)
+    except Exception as exc:
+        logger.warning("下载输出异常: %s", exc)
+        return None
+
 def _file_metadata(path: str) -> dict:
     try:
         p = Path(path)
@@ -202,16 +241,83 @@ def _file_metadata(path: str) -> dict:
     except Exception:
         return {"path": path, "exists": False}
 
-def _write_json_log(operation: str, input_path: str | None, output_urls: list[str] | None, params: dict | None, steps: list | None, summary: str | None, events: list[dict] | None) -> str:
+def _load_image_from_bytes(data: bytes, filename: str):
+    try:
+        from PIL import Image as _Image
+    except Exception:
+        raise HTTPException(status_code=500, detail="Pillow not available on server")
+    # Try HEIC regardless of extension
+    try:
+        import pillow_heif as _pheif
+        heif = _pheif.read_heif(data)
+        return _Image.frombytes(heif.mode, heif.size, heif.data)
+    except Exception:
+        pass
+    # Try RAW regardless of extension
+    try:
+        import rawpy as _rawpy
+        import numpy as _np
+        with _rawpy.imread(io.BytesIO(data)) as raw:
+            rgb = raw.postprocess(use_camera_wb=True, no_auto_bright=True, output_bps=8, gamma=(1, 1))
+        return _Image.fromarray(rgb)
+    except Exception:
+        pass
+    # Fallback to common image types
+    try:
+        return _Image.open(io.BytesIO(data)).convert('RGB')
+    except Exception:
+        raise HTTPException(status_code=400, detail="Unsupported image payload")
+
+def _pil_to_bytes(img, fmt: str, quality: int | None = None, compression: int | None = None):
+    buf = io.BytesIO()
+    f = (fmt or 'jpeg').lower()
+    if f == 'jpeg':
+        q = int(quality or 90)
+        img.save(buf, format='JPEG', quality=q, subsampling=0)
+        mime = 'image/jpeg'
+    elif f == 'png':
+        c = int(compression or 6)
+        img.save(buf, format='PNG', compress_level=c)
+        mime = 'image/png'
+    elif f == 'webp':
+        q = int(quality or 85)
+        img.save(buf, format='WEBP', quality=q)
+        mime = 'image/webp'
+    elif f == 'tiff':
+        img.save(buf, format='TIFF')
+        mime = 'image/tiff'
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported output format")
+    return buf.getvalue(), mime
+
+def _resize_image_max(img, max_side: int):
+    try:
+        w, h = img.size
+        m = int(max_side)
+        if w <= m and h <= m:
+            return img
+        if w >= h:
+            nw = m
+            nh = int(h * m / w)
+        else:
+            nh = m
+            nw = int(w * m / h)
+        return img.resize((nw, nh))
+    except Exception:
+        return img
+
+def _write_json_log(operation: str, input_path: str | None, output_urls: list[str] | None, params: dict | None, steps: list | None, summary: str | None, events: list[dict] | None, local_output_paths: Optional[list[str]] = None, record_id: Optional[int] = None) -> str:
     payload = {
         "timestamp": datetime.utcnow().isoformat(),
         "operation": operation,
         "input": _file_metadata(input_path) if input_path else None,
         "outputs": output_urls or [],
+        "local_outputs": [ _file_metadata(p) for p in (local_output_paths or []) ],
         "params": params or {},
         "steps": steps or [],
         "summary": summary or "",
         "events": events or [],
+        "record_id": record_id,
     }
     fname = f"log_{operation}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}.json"
     fpath = LOGS_DIR / fname
@@ -222,6 +328,15 @@ def _write_json_log(operation: str, input_path: str | None, output_urls: list[st
     except Exception as exc:
         logger.error("写入日志失败: %s", exc)
     return str(fpath)
+
+def _update_record_logs(record_id: int, logs_path: str) -> None:
+    try:
+        with _get_conn() as conn:
+            conn.execute("UPDATE records SET logs = ? WHERE id = ?", (logs_path, record_id))
+            conn.commit()
+        logger.info("记录 %s 日志路径更新: %s", record_id, logs_path)
+    except Exception as exc:
+        logger.warning("更新记录日志失败: %s", exc)
 
 
 def _insert_record(
@@ -396,6 +511,41 @@ def get_record(record_id: int):
 def fetch_logs(lines: int = 200):
     lines = max(1, min(lines, 2000))
     return {"lines": _read_log_tail(lines)}
+
+@app.post("/preview")
+async def preview(image: UploadFile = File(...)):
+    payload = await image.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="No image payload")
+    img = _load_image_from_bytes(payload, image.filename or "image.bin")
+    try:
+        img.thumbnail((1600, 1600))
+    except Exception:
+        pass
+    data, mime = _pil_to_bytes(img, 'png')
+    return StreamingResponse(io.BytesIO(data), media_type=mime, headers={"Cache-Control": "no-cache"})
+
+@app.post("/convert")
+async def convert(image: UploadFile = File(...), format: str = Form("jpeg"), quality: int = Form(90), compression: int = Form(6)):
+    payload = await image.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="No image payload")
+    img = _load_image_from_bytes(payload, image.filename or "image.bin")
+    data, mime = _pil_to_bytes(img, format.lower(), quality, compression)
+    return StreamingResponse(io.BytesIO(data), media_type=mime, headers={"Cache-Control": "no-cache"})
+
+@app.get("/proxy_image")
+def proxy_image(url: str):
+    if not isinstance(url, str) or not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="invalid url")
+    try:
+        r = requests.get(url, timeout=30)
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"fetch failed {r.status_code}")
+        ct = r.headers.get("content-type") or "application/octet-stream"
+        return StreamingResponse(io.BytesIO(r.content), media_type=ct, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 @app.post("/records/{record_id}/images", response_model=RecordImageModel)
@@ -675,7 +825,7 @@ async def analyze(image: UploadFile = File(...), prompt: str = Form("")):
     print(f"返回总结长度: {len(summary or '')}")
     logger.info("Analyze response items=%d summary_len=%d", len(items), len(summary or ""))
     try:
-        _insert_record(
+        rec = _insert_record(
             prompt=prompt or "",
             thinking=thinking_text,
             image_path=saved_image_path,
@@ -683,6 +833,10 @@ async def analyze(image: UploadFile = File(...), prompt: str = Form("")):
             original_name=image.filename,
             raw_response=raw_json,
         )
+        try:
+            _insert_record_image(record_id=rec.id, kind="input", image_path=saved_image_path)
+        except Exception:
+            pass
     except Exception as exc:
         logger.warning("Failed to persist analyze record: %s", exc)
     return {"analysis": items, "summary": summary or ""}
@@ -704,7 +858,6 @@ async def magic_edit(
     watermark: bool = Form(False),
     negative_prompt: str = Form(""),
     prompt_extend: bool = Form(True),
-    mask: UploadFile | None = File(None)
 ):
     if MultiModalConversation is None:
         raise HTTPException(status_code=500, detail="dashscope SDK not available on server")
@@ -713,26 +866,39 @@ async def magic_edit(
         raise HTTPException(status_code=500, detail="DASHSCOPE_API_KEY not configured")
 
     payload = await image.read()
+    logger.info("magic_edit received bytes=%d", len(payload or b""))
     if not payload:
         raise HTTPException(status_code=400, detail="No image payload")
+    original_local_path = _save_image_bytes(image.filename or "image.png", payload)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=Path(image.filename or "image").suffix or ".png")
     tmp.write(payload)
     tmp.flush(); tmp.close()
 
-    mask_tmp_path = None
-    if mask is not None:
-        mask_bytes = await mask.read()
-        mt = tempfile.NamedTemporaryFile(delete=False, suffix=Path(mask.filename or "mask").suffix or ".png")
-        mt.write(mask_bytes); mt.flush(); mt.close()
-        mask_tmp_path = mt.name
 
     try:
-        data_url = _encode_image_to_data_url(tmp.name)
+        try:
+            img = _load_image_from_bytes(payload, image.filename or "image.bin")
+        except Exception:
+            from PIL import Image as _Image
+            img = _Image.open(tmp.name)
+        img = _resize_image_max(img, 2048)
+        ext = (Path(image.filename or "").suffix or "").lower()
+        raw_heic_exts = {'.heic', '.heif', '.dng', '.raw', '.arw', '.cr2', '.nef', '.raf', '.orf', '.rw2'}
+        if ext in ['.jpg', '.jpeg'] or ext in raw_heic_exts:
+            fmt = 'jpeg'
+        else:
+            fmt = 'png'
+        bin_bytes, mime = _pil_to_bytes(img, fmt, quality=85 if fmt=='jpeg' else None)
+        b64 = base64.b64encode(bin_bytes).decode("utf-8")
+        if len(b64) > 19000000:
+            bin_bytes, mime = _pil_to_bytes(img, 'jpeg', quality=85)
+            b64 = base64.b64encode(bin_bytes).decode("utf-8")
+        data_url = f"data:{mime};base64,{b64}"
         contents: list[dict] = [{"image": data_url}]
+        logger.info("magic_edit prompt len=%d", len(prompt or ""))
+        print("magic_edit 提示词:", prompt)
         if prompt:
             contents.append({"text": prompt})
-        if mask_tmp_path:
-            contents.append({"image": _encode_image_to_data_url(mask_tmp_path)})
         messages = [{"role": "user", "content": contents}]
 
         model = os.getenv("IMAGE_EDIT_MODEL", "qwen-image-edit-plus")
@@ -746,8 +912,9 @@ async def magic_edit(
             negative_prompt=negative_prompt or " ",
             prompt_extend=prompt_extend,
         )
-        if n == 1 and size:
-            kwargs["size"] = size
+        size_used = _normalize_size_param(size, n)
+        if size_used:
+            kwargs["size"] = size_used
 
         resp = MultiModalConversation.call(**kwargs)
         if getattr(resp, "status_code", None) == 200:
@@ -761,36 +928,71 @@ async def magic_edit(
             if not urls:
                 raise HTTPException(status_code=502, detail="Model returned no image URLs")
             try:
+                local_paths = []
+                for u in urls:
+                    p = _download_and_save_image(u)
+                    if p:
+                        local_paths.append(p)
                 params = {
                     "model": model,
                     "n": n,
-                    "size": size,
+                    "size": size_used or size,
                     "watermark": watermark,
                     "negative_prompt": negative_prompt,
                     "prompt_extend": prompt_extend,
                     "endpoint": os.getenv("IMAGE_EDIT_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1"),
-                    "has_mask": bool(mask_tmp_path),
                 }
                 steps = [{"text": prompt}] if prompt else []
                 events = [
                     {"level": "INFO", "message": "magic_edit 完成", "outputs": len(urls)},
                     {"level": "DEBUG", "message": "请求参数", "value": params},
                 ]
-                _write_json_log("magic_edit", tmp.name, urls, params, steps, prompt, events)
+                log_path = _write_json_log("magic_edit", original_local_path, urls, params, steps, prompt, events, local_output_paths=local_paths)
+                rec = _insert_record(
+                    prompt=prompt or "",
+                    thinking=None,
+                    image_path=original_local_path,
+                    logs=log_path,
+                    original_name=image.filename,
+                    raw_response=_safe_json_dump({"urls": urls}),
+                )
+                try:
+                    _insert_record_image(record_id=rec.id, kind="input", image_path=original_local_path)
+                except Exception:
+                    pass
+                try:
+                    if local_paths:
+                        if len(local_paths) == 1:
+                            _insert_record_image(record_id=rec.id, kind="final", image_path=local_paths[0])
+                        else:
+                            for p in local_paths[:-1]:
+                                _insert_record_image(record_id=rec.id, kind="intermediate", image_path=p)
+                            _insert_record_image(record_id=rec.id, kind="final", image_path=local_paths[-1])
+                except Exception as exc:
+                    logger.warning("保存输出图片记录失败: %s", exc)
             except Exception as exc:
                 logger.warning("magic_edit 写日志失败: %s", exc)
-            return {"urls": urls}
+            try:
+                served_urls: list[str] = []
+                if local_paths:
+                    base = os.getenv("SERVER_BASE_URL", "http://localhost:8000").rstrip("/")
+                    served_urls = [f"{base}/static/{Path(p).name}" for p in local_paths]
+                else:
+                    served_urls = urls
+                return {"urls": served_urls}
+            except Exception:
+                return {"urls": urls}
+        # Non-200: return error; input已规范化为PNG
+        try:
+            logger.error("magic_edit 非200 status=%s code=%s message=%s", getattr(resp, "status_code", None), getattr(resp, "code", None), getattr(resp, "message", None))
+        except Exception:
+            pass
         raise HTTPException(status_code=getattr(resp, "status_code", 500), detail=getattr(resp, "message", "image edit failed"))
     finally:
         try:
             os.unlink(tmp.name)
         except Exception:
             pass
-        if mask_tmp_path:
-            try:
-                os.unlink(mask_tmp_path)
-            except Exception:
-                pass
 
 @app.post("/analyze_stream")
 async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
@@ -910,7 +1112,7 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
                         {"level": "INFO", "message": "SSE 分析完成"},
                         {"level": "DEBUG", "message": "已发送条目总数", "value": len(sent_ids)},
                     ]
-                    _write_json_log("analyze_stream", tmp.name, [], params, steps, summary, events)
+                    _write_json_log("analyze_stream", tmp.name, [], params, steps, summary, events, local_output_paths=[], record_id=None)
                 except Exception as exc:
                     logger.warning("SSE 写日志失败: %s", exc)
                 push({"type": "final", "summary": summary})
@@ -934,3 +1136,21 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
         "X-Accel-Buffering": "no",
     }
     return StreamingResponse(gen(), media_type="text/event-stream", headers=headers)
+def _normalize_size_param(size: str, n: int) -> Optional[str]:
+    try:
+        if n != 1:
+            return None
+        s = (size or "").strip()
+        if not s:
+            return None
+        if "*" not in s:
+            return "2048*2048"
+        parts = s.split("*")
+        w = int(parts[0])
+        h = int(parts[1])
+        if w < 512 or h < 512 or w > 2048 or h > 2048:
+            logger.info("magic_edit 归一化输出尺寸 %s -> 2048*2048", s)
+            return "2048*2048"
+        return s
+    except Exception:
+        return "2048*2048"

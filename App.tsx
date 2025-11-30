@@ -36,8 +36,29 @@ export default function App() {
     return () => clearTimeout(introTimer);
   }, []);
 
-  const handleStart = (file: File, prompt: string = '') => {
-    if (file) {
+  const handleStart = async (file: File, prompt: string = '') => {
+    if (!file) return;
+    const name = (file.name || '').toLowerCase();
+    const isHeic = /\.(heic|heif)$/.test(name);
+    const isRaw = /\.(dng|raw|arw|cr2|nef|raf|orf|rw2)$/.test(name);
+    try {
+      let previewUrl: string;
+      if (isHeic || isRaw) {
+        if (isHeic) {
+          const { convertHeicClient } = await import('./services/gemini');
+          previewUrl = await convertHeicClient(file);
+        } else {
+          const { getPreviewForUpload } = await import('./services/gemini');
+          previewUrl = await getPreviewForUpload(file);
+        }
+      } else {
+        previewUrl = URL.createObjectURL(file);
+      }
+      setImagePreview(previewUrl);
+      setImageFile(file);
+      setInitialPrompt(prompt);
+      setPage('smartEditor');
+    } catch (e) {
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
       setImageFile(file);
