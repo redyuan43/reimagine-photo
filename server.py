@@ -1081,16 +1081,18 @@ def _normalize_size_param(size: str, n: int) -> Optional[str]:
         if not s:
             return None
         if "*" not in s:
-            return "2048*2048"
+            return None
         parts = s.split("*")
         w = int(parts[0])
         h = int(parts[1])
-        if w < 512 or h < 512 or w > 2048 or h > 2048:
-            logger.info("magic_edit 归一化输出尺寸 %s -> 2048*2048", s)
-            return "2048*2048"
-        return s
-    except Exception:
+        # 如果尺寸不超过 2048*2048，则保持照片默认尺寸
+        if w <= 2048 and h <= 2048:
+            return s
+        # 若超过 2048 的限制，则归一化到 2048*2048（模型只接受到此上限）
+        logger.info("magic_edit 归一化输出尺寸 %s -> 2048*2048", s)
         return "2048*2048"
+    except Exception:
+        return None
 
 if __name__ == "__main__":
     import uvicorn
