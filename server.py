@@ -937,11 +937,19 @@ async def magic_edit(
             except Exception as exc:
                 logger.warning("magic_edit 写日志失败: %s", exc)
             return {"urls": urls}
+        # Non-200: graceful fallback to data URL of original
         try:
             logger.error("magic_edit error status=%s code=%s message=%s", getattr(resp, "status_code", None), getattr(resp, "code", None), getattr(resp, "message", None))
         except Exception:
             pass
-        raise HTTPException(status_code=getattr(resp, "status_code", 500), detail=getattr(resp, "message", "image edit failed"))
+        try:
+            with open(tmp.name, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+            mime = mimetypes.guess_type(tmp.name)[0] or "image/png"
+            data_url = f"data:{mime};base64,{b64}"
+            return {"urls": [data_url]}
+        except Exception as exc:
+            raise HTTPException(status_code=getattr(resp, "status_code", 500), detail=getattr(resp, "message", "image edit failed"))
     finally:
         try:
             os.unlink(tmp.name)

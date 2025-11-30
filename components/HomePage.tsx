@@ -795,6 +795,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
       return;
     }
     try {
+      if (isHeic) {
+        const { convertHeicClient } = await import('../services/gemini');
+        const previewUrl = await convertHeicClient(file);
+        setFilePreview(previewUrl);
+        (window as any)._previewError = undefined;
+        return;
+      }
       const { getPreviewForUpload } = await import('../services/gemini');
       const previewUrl = await getPreviewForUpload(file);
       setFilePreview(previewUrl);

@@ -227,6 +227,20 @@ export const getPreviewForUpload = async (file: File): Promise<string> => {
   return URL.createObjectURL(blob);
 };
 
+export const convertHeicClient = async (file: File): Promise<string> => {
+  try {
+    const heic2any = (await import('heic2any')).default as any;
+    const outputBlob = await heic2any({
+      blob: file,
+      toType: 'image/jpeg',
+      quality: 0.9,
+    });
+    return URL.createObjectURL(outputBlob);
+  } catch (e) {
+    throw e;
+  }
+};
+
 export const convertImage = async (
   imageBlob: Blob,
   format: 'jpeg' | 'png' | 'webp' | 'tiff',
