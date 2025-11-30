@@ -1091,3 +1091,8 @@ def _normalize_size_param(size: str, n: int) -> Optional[str]:
         return s
     except Exception:
         return "2048*2048"
+
+if __name__ == "__main__":
+    import uvicorn
+    print("Starting server on http://0.0.0.0:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

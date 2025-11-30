@@ -32,6 +32,7 @@ interface SmartEditorProps {
   initialPrompt?: string;
   onReset: () => void;
   lang: 'zh' | 'en';
+  startMode?: 'analyze' | 'direct';
 }
 
 export const SmartEditor: React.FC<SmartEditorProps> = ({
@@ -39,7 +40,8 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   imageFile,
   initialPrompt = '',
   onReset,
-  lang
+  lang,
+  startMode = 'analyze'
 }) => {
   const [status, setStatus] = useState<'analyzing' | 'ready' | 'executing' | 'completed'>('analyzing');
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
@@ -52,6 +54,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   const [convertProgress, setConvertProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [currentActiveStepIndex, setCurrentActiveStepIndex] = useState(-1);
+  const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   
   // History Management
   const [imageHistory, setImageHistory] = useState<string[]>([]);
@@ -167,12 +170,16 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       } else {
          setPlanItems([]);
       }
+      if (startMode === 'direct') {
+        if (isMounted) setStatus('ready');
+        await executeMagic(undefined, initialPrompt || '');
+        return;
+      }
 
       // Start Streaming Analysis
       const s = await analyzeImage(imageFile, (newItem) => {
           if (isMounted) {
               setPlanItems(prev => {
-                  // Avoid duplicates
                   if (prev.find(p => p.id === newItem.id)) return prev;
                   return [...prev, newItem];
               });
@@ -190,7 +197,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [imageFile]); 
+  }, [imageFile, startMode]); 
 
   // Auto-scroll to bottom as items arrive
   useEffect(() => {
@@ -368,24 +375,30 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     }, 2000); 
 
     try {
+        console.log('[executeMagic] Starting, sourceBlob:', sourceBlob, 'activeSteps:', activeSteps.length);
         const resultUrl = await editImage(sourceBlob, activeSteps, instruction, '1K', sendName);
+        console.log('[executeMagic] editImage returned URL:', resultUrl);
         
         clearInterval(progressInterval);
         
         if (resultUrl) {
+            console.log('[executeMagic] Adding to history:', resultUrl);
             addToHistory(resultUrl);
-            setIsHighRes(false);
             setErrorMessage(null);
+        } else {
+            console.warn('[executeMagic] resultUrl is null/undefined');
         }
         setStatus('completed');
         setCurrentActiveStepIndex(-1);
+        console.log('[executeMagic] Success!');
     } catch (e) {
+        console.error('[executeMagic] Error caught:', e);
         clearInterval(progressInterval);
         if (status === 'analyzing') setStatus('ready'); 
         else if (status !== 'completed') setStatus('ready');
         else setStatus('completed');
         
-        setErrorMessage('生成失败，请稍后重试');
+        setErrorMessage('生成失败,请稍后重试');
     } finally {
         setIsProcessing(false);
     }
@@ -426,7 +439,6 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           
           if (resultUrl) {
               addToHistory(resultUrl);
-              setIsHighRes(false);
               setIsMaskingMode(false);
               setCurrentMaskBlob(null);
               setUserInput('');
@@ -555,6 +567,16 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
             </div>
         )}
 
+        {!isMaskingMode && downloadUrl && (
+            <a
+              href={downloadUrl}
+              download={`export.${exportFormat==='jpeg'?'jpg':exportFormat}`}
+              className="absolute top-6 right-6 z-30 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-full text-sm font-medium flex items-center gap-1 shadow-lg border border-amber-400"
+            >
+              <ArrowDownTrayIcon className="w-4 h-4" /> {dict.downloadResult}
+            </a>
+        )}
+
         {/* --- Main Viewport --- */}
         {isMaskingMode && currentDisplayImage ? (
             <CanvasMaskEditor 
@@ -633,6 +655,19 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
+                  if (!showDownloadOptions) {
+                    setShowDownloadOptions(true);
+                  } else {
+                    handleConvertAndDownload();
+                  }
+                }}
+                title={dict.downloadResult}
+                className="p-2 rounded-full bg-amber-500 hover:bg-amber-600 text-black border border-amber-400 shadow-sm"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
                   const next = isPreviewCollapsed ? 42 : 24;
                   setLeftPct(next);
                   setIsPreviewCollapsed(!isPreviewCollapsed);
@@ -652,12 +687,6 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         </div>
 
         <div ref={rightPaneRef} className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-            {errorMessage && (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-4 p-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 flex items-center justify-between">
-                <span className="text-sm">{errorMessage}</span>
-                <button onClick={() => setErrorMessage(null)} className="px-2 py-1 text-xs rounded bg-red-500/20 hover:bg-red-500/30">关闭</button>
-              </motion.div>
-            )}
             {/* Step List */}
             <div className="grid grid-cols-1 gap-4">
               <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
@@ -805,6 +834,15 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
             </div>
         </div>
 
+        {errorMessage && (
+          <div className="px-6 pt-4 bg-[#121212]">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 flex items-center justify-between">
+              <span className="text-sm">{errorMessage}</span>
+              <button onClick={() => setErrorMessage(null)} className="px-2 py-1 text-xs rounded bg-red-500/20 hover:bg-red-500/30">关闭</button>
+            </motion.div>
+          </div>
+        )}
+
         {summaryText !== undefined && (
           <div className={`px-6 border-t border-white/10 bg-[#121212] transition-all duration-300 ${isSummaryCollapsed ? 'py-0 max-h-0 overflow-hidden' : 'py-4'}`}>
             <div className="max-w-none">
@@ -943,44 +981,39 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
               <div className="flex flex-col gap-3 mt-2">
                 {!isMaskingMode && (
                   <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2">
-                        <label className="text-xs text-gray-300 mb-1 block">{dict.format}</label>
-                        <select value={exportFormat} onChange={(e)=>setExportFormat(e.target.value as any)} className="w-full bg-[#181818] border border-white/10 rounded-xl text-sm text-gray-200 px-3 py-2">
-                          <option value="jpeg">JPEG</option>
-                          <option value="png">PNG</option>
-                          <option value="webp">WEBP</option>
-                          <option value="tiff">TIFF</option>
-                        </select>
-                        <p className="text-xs text-gray-400 mt-1">{dict.formatHelp}</p>
-                      </div>
-                      {exportFormat !== 'png' && exportFormat !== 'tiff' && (
-                        <div>
-                          <label className="text-xs text-gray-300 mb-1 block">{dict.quality} {exportQuality}</label>
-                          <input type="range" min={60} max={100} value={exportQuality} onChange={(e)=>setExportQuality(parseInt(e.target.value))} className="w-full" />
+                    
+                    {showDownloadOptions && (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="col-span-2">
+                            <label className="text-xs text-gray-300 mb-1 block">{dict.format}</label>
+                            <select value={exportFormat} onChange={(e)=>setExportFormat(e.target.value as any)} className="w-full bg-[#181818] border border-white/10 rounded-xl text-sm text-gray-200 px-3 py-2">
+                              <option value="jpeg">JPEG</option>
+                              <option value="png">PNG</option>
+                              <option value="webp">WEBP</option>
+                              <option value="tiff">TIFF</option>
+                            </select>
+                            <p className="text-xs text-gray-400 mt-1">{dict.formatHelp}</p>
+                          </div>
+                          {exportFormat !== 'png' && exportFormat !== 'tiff' && (
+                            <div>
+                              <label className="text-xs text-gray-300 mb-1 block">{dict.quality} {exportQuality}</label>
+                              <input type="range" min={60} max={100} value={exportQuality} onChange={(e)=>setExportQuality(parseInt(e.target.value))} className="w-full" />
+                            </div>
+                          )}
+                          {exportFormat === 'png' && (
+                            <div>
+                              <label className="text-xs text-gray-300 mb-1 block">{dict.compression} {exportCompression}</label>
+                              <input type="range" min={0} max={9} value={exportCompression} onChange={(e)=>setExportCompression(parseInt(e.target.value))} className="w-full" />
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {exportFormat === 'png' && (
-                        <div>
-                          <label className="text-xs text-gray-300 mb-1 block">{dict.compression} {exportCompression}</label>
-                          <input type="range" min={0} max={9} value={exportCompression} onChange={(e)=>setExportCompression(parseInt(e.target.value))} className="w-full" />
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      onClick={handleConvertAndDownload}
-                      disabled={isConverting || isProcessing}
-                      className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-medium transition-colors shadow-lg flex items-center justify-center gap-2 disabled:opacity-70"
-                    >
-                      <ArrowDownTrayIcon className="w-5 h-5" /> {dict.downloadResult}
-                    </button>
-                    {isConverting && (
-                      <div className="w-full h-2 rounded bg-white/10 overflow-hidden">
-                        <div className="h-2 bg-blue-500" style={{ width: `${convertProgress}%` }} />
-                      </div>
-                    )}
-                    {downloadUrl && (
-                      <a href={downloadUrl} download={`export.${exportFormat==='jpeg'?'jpg':exportFormat}`} className="text-xs text-blue-300 underline">点击下载导出文件</a>
+                        {isConverting && (
+                          <div className="w-full h-2 rounded bg-white/10 overflow-hidden">
+                            <div className="h-2 bg-blue-500" style={{ width: `${convertProgress}%` }} />
+                          </div>
+                        )}
+                      </>
                     )}
                   </>
                 )}

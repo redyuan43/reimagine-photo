@@ -202,13 +202,21 @@ export const editImage = async (
     fd.append('watermark', 'false');
     fd.append('prompt_extend', 'true');
     const res = await fetch('http://localhost:8000/magic_edit', { method: 'POST', body: fd });
+    console.log('magic_edit response status:', res.status, res.ok);
     if (res.ok) {
       const data = await res.json() as { urls?: string[] };
+      console.log('magic_edit response data:', data);
       const url = (data.urls && data.urls[0]) || null;
-      if (!url) throw new Error('No URLs returned');
+      console.log('Extracted URL:', url);
+      if (!url) {
+        console.error('No URL found in response, data:', data);
+        throw new Error('No URLs returned');
+      }
+      console.log('Returning URL:', url);
       return url;
     }
     const txt = await res.text();
+    console.error('magic_edit failed, status:', res.status, 'response:', txt);
     throw new Error(`magic_edit failed ${res.status}: ${txt}`);
   } catch (e) {
     throw e;

@@ -10,6 +10,7 @@ export default function App() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [initialPrompt, setInitialPrompt] = useState('');
+  const [startMode, setStartMode] = useState<'analyze' | 'direct'>('analyze');
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isLoadingKey, setIsLoadingKey] = useState(true);
   
@@ -36,7 +37,7 @@ export default function App() {
     return () => clearTimeout(introTimer);
   }, []);
 
-  const handleStart = async (file: File, prompt: string = '') => {
+  const handleStart = async (file: File, prompt: string = '', mode: 'analyze' | 'direct' = 'analyze') => {
     if (!file) return;
     const name = (file.name || '').toLowerCase();
     const isHeic = /\.(heic|heif)$/.test(name);
@@ -57,12 +58,14 @@ export default function App() {
       setImagePreview(previewUrl);
       setImageFile(file);
       setInitialPrompt(prompt);
+      setStartMode(mode);
       setPage('smartEditor');
     } catch (e) {
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
       setImageFile(file);
       setInitialPrompt(prompt);
+      setStartMode(mode);
       setPage('smartEditor');
     }
   };
@@ -121,6 +124,7 @@ export default function App() {
                         initialPrompt={initialPrompt}
                         onReset={handleReset}
                         lang={lang}
+                        startMode={startMode}
                       />
                     )}
                   </motion.div>

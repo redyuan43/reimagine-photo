@@ -6,7 +6,7 @@ import { PhotoIcon, PaperAirplaneIcon, ArrowUpTrayIcon, HandThumbUpIcon, StarIco
 import * as THREE from 'three';
 
 interface HomePageProps {
-  onStart: (file: File, prompt: string) => void;
+  onStart: (file: File, prompt: string, mode?: 'analyze' | 'direct') => void;
   lang: 'zh' | 'en';
   setLang: (lang: 'zh' | 'en') => void;
 }
@@ -814,11 +814,11 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
   };
 
   const handleSubmit = () => {
-    if (selectedFile) {
+    if (selectedFile && promptText.trim()) {
         setIsLoading(true);
         // Simulate loading for animation demo
         setTimeout(() => {
-            onStart(selectedFile, promptText);
+            onStart(selectedFile, promptText, 'direct');
             setIsLoading(false);
         }, 2000);
     }
@@ -949,23 +949,31 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                              />
                          </div>
 
-                         {/* Action Button */}
-                         <button 
-                            ref={generateBtnRef}
-                            onClick={handleSubmit}
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => selectedFile && onStart(selectedFile, promptText, 'analyze')}
                             disabled={!selectedFile || isLoading}
-                            className="h-14 px-8 rounded-xl bg-white text-black hover:bg-amber-50 disabled:bg-white/10 disabled:text-white/20 font-semibold text-base transition-all flex items-center gap-2 shadow-lg disabled:shadow-none disabled:cursor-not-allowed relative overflow-hidden"
-                         >
-                             <span className={`transition-opacity duration-200 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>
-                                {lang === 'zh' ? '生成' : 'Generate'}
-                             </span>
-                             {isLoading && (
-                               <div className="absolute inset-0 flex items-center justify-center">
-                                 <BlinkingSmileIcon className="w-8 h-8 text-amber-600" />
-                               </div>
-                             )}
-                             {!isLoading && <BlinkingSmileIcon className="w-6 h-6" />}
-                         </button>
+                            className="h-14 px-6 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-base transition-all flex items-center gap-2 shadow-lg disabled:bg-white/10 disabled:text-white/20 disabled:shadow-none disabled:cursor-not-allowed"
+                          >
+                            <span>{lang === 'zh' ? '分析' : 'Analyze'}</span>
+                          </button>
+                          <button 
+                             ref={generateBtnRef}
+                             onClick={handleSubmit}
+                             disabled={!selectedFile || isLoading || !promptText.trim()}
+                             className="h-14 px-8 rounded-xl bg-white text-black hover:bg-amber-50 disabled:bg-white/10 disabled:text-white/20 font-semibold text-base transition-all flex items-center gap-2 shadow-lg disabled:shadow-none disabled:cursor-not-allowed relative overflow-hidden"
+                          >
+                              <span className={`transition-opacity duration-200 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>
+                                 {lang === 'zh' ? '生成' : 'Generate'}
+                              </span>
+                              {isLoading && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <BlinkingSmileIcon className="w-8 h-8 text-amber-600" />
+                                </div>
+                              )}
+                              {!isLoading && <BlinkingSmileIcon className="w-6 h-6" />}
+                          </button>
+                        </div>
                      </div>
                  </div>
 
