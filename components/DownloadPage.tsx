@@ -132,14 +132,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ sourceUrl, onConfirm
 
   return (
     <div className="min-h-screen bg-[#0b0b0c] text-white flex flex-col">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/30">
-        <h1 className="text-lg font-semibold">下载中心</h1>
-        <div />
-      </div>
-
       <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
         <div className="bg-[#121212] border border-white/10 rounded-2xl p-4 flex flex-col">
-          <div className="flex-1 flex items-center justify-center bg-black/20 rounded-xl overflow-hidden">
+          <div className="flex-1 flex items-start justify-center bg-black/20 rounded-xl overflow-hidden">
             <AnimatePresence>
               {sourceUrl && (
                 <motion.img
