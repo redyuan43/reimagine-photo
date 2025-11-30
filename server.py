@@ -203,6 +203,26 @@ def _save_image_bytes(filename: str, data: bytes) -> str:
     logger.info("Saved image to %s (%d bytes)", dest_path, len(data))
     return str(dest_path)
 
+def _download_and_save_image(url: str) -> Optional[str]:
+    try:
+        r = requests.get(url, timeout=60)
+        if r.status_code != 200:
+            logger.warning("下载输出失败 status=%s url=%s", r.status_code, url)
+            return None
+        ct = r.headers.get("content-type") or "image/png"
+        ext = ".png"
+        try:
+            guess = mimetypes.guess_extension(ct.split(";")[0].strip())
+            if guess:
+                ext = guess
+        except Exception:
+            pass
+        name = f"output{ext}"
+        return _save_image_bytes(name, r.content)
+    except Exception as exc:
+        logger.warning("下载输出异常: %s", exc)
+        return None
+
 def _file_metadata(path: str) -> dict:
     try:
         p = Path(path)
@@ -218,16 +238,18 @@ def _file_metadata(path: str) -> dict:
     except Exception:
         return {"path": path, "exists": False}
 
-def _write_json_log(operation: str, input_path: str | None, output_urls: list[str] | None, params: dict | None, steps: list | None, summary: str | None, events: list[dict] | None) -> str:
+def _write_json_log(operation: str, input_path: str | None, output_urls: list[str] | None, params: dict | None, steps: list | None, summary: str | None, events: list[dict] | None, local_output_paths: Optional[list[str]] = None, record_id: Optional[int] = None) -> str:
     payload = {
         "timestamp": datetime.utcnow().isoformat(),
         "operation": operation,
         "input": _file_metadata(input_path) if input_path else None,
         "outputs": output_urls or [],
+        "local_outputs": [ _file_metadata(p) for p in (local_output_paths or []) ],
         "params": params or {},
         "steps": steps or [],
         "summary": summary or "",
         "events": events or [],
+        "record_id": record_id,
     }
     fname = f"log_{operation}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}.json"
     fpath = LOGS_DIR / fname
@@ -238,6 +260,15 @@ def _write_json_log(operation: str, input_path: str | None, output_urls: list[st
     except Exception as exc:
         logger.error("写入日志失败: %s", exc)
     return str(fpath)
+
+def _update_record_logs(record_id: int, logs_path: str) -> None:
+    try:
+        with _get_conn() as conn:
+            conn.execute("UPDATE records SET logs = ? WHERE id = ?", (logs_path, record_id))
+            conn.commit()
+        logger.info("记录 %s 日志路径更新: %s", record_id, logs_path)
+    except Exception as exc:
+        logger.warning("更新记录日志失败: %s", exc)
 
 
 def _insert_record(
@@ -704,7 +735,7 @@ async def analyze(image: UploadFile = File(...), prompt: str = Form("")):
     print(f"返回总结长度: {len(summary or '')}")
     logger.info("Analyze response items=%d summary_len=%d", len(items), len(summary or ""))
     try:
-        _insert_record(
+        rec = _insert_record(
             prompt=prompt or "",
             thinking=thinking_text,
             image_path=saved_image_path,
@@ -712,6 +743,10 @@ async def analyze(image: UploadFile = File(...), prompt: str = Form("")):
             original_name=image.filename,
             raw_response=raw_json,
         )
+        try:
+            _insert_record_image(record_id=rec.id, kind="input", image_path=saved_image_path)
+        except Exception:
+            pass
     except Exception as exc:
         logger.warning("Failed to persist analyze record: %s", exc)
     return {"analysis": items, "summary": summary or ""}
@@ -744,6 +779,7 @@ async def magic_edit(
     logger.info("magic_edit received bytes=%d", len(payload or b""))
     if not payload:
         raise HTTPException(status_code=400, detail="No image payload")
+    original_local_path = _save_image_bytes(image.filename or "image.png", payload)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=Path(image.filename or "image").suffix or ".png")
     tmp.write(payload)
     tmp.flush(); tmp.close()
@@ -784,6 +820,11 @@ async def magic_edit(
             if not urls:
                 raise HTTPException(status_code=502, detail="Model returned no image URLs")
             try:
+                local_paths = []
+                for u in urls:
+                    p = _download_and_save_image(u)
+                    if p:
+                        local_paths.append(p)
                 params = {
                     "model": model,
                     "n": n,
@@ -798,7 +839,29 @@ async def magic_edit(
                     {"level": "INFO", "message": "magic_edit 完成", "outputs": len(urls)},
                     {"level": "DEBUG", "message": "请求参数", "value": params},
                 ]
-                _write_json_log("magic_edit", tmp.name, urls, params, steps, prompt, events)
+                log_path = _write_json_log("magic_edit", original_local_path, urls, params, steps, prompt, events, local_output_paths=local_paths)
+                rec = _insert_record(
+                    prompt=prompt or "",
+                    thinking=None,
+                    image_path=original_local_path,
+                    logs=log_path,
+                    original_name=image.filename,
+                    raw_response=_safe_json_dump({"urls": urls}),
+                )
+                try:
+                    _insert_record_image(record_id=rec.id, kind="input", image_path=original_local_path)
+                except Exception:
+                    pass
+                try:
+                    if local_paths:
+                        if len(local_paths) == 1:
+                            _insert_record_image(record_id=rec.id, kind="final", image_path=local_paths[0])
+                        else:
+                            for p in local_paths[:-1]:
+                                _insert_record_image(record_id=rec.id, kind="intermediate", image_path=p)
+                            _insert_record_image(record_id=rec.id, kind="final", image_path=local_paths[-1])
+                except Exception as exc:
+                    logger.warning("保存输出图片记录失败: %s", exc)
             except Exception as exc:
                 logger.warning("magic_edit 写日志失败: %s", exc)
             return {"urls": urls}
@@ -931,7 +994,7 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
                         {"level": "INFO", "message": "SSE 分析完成"},
                         {"level": "DEBUG", "message": "已发送条目总数", "value": len(sent_ids)},
                     ]
-                    _write_json_log("analyze_stream", tmp.name, [], params, steps, summary, events)
+                    _write_json_log("analyze_stream", tmp.name, [], params, steps, summary, events, local_output_paths=[], record_id=None)
                 except Exception as exc:
                     logger.warning("SSE 写日志失败: %s", exc)
                 push({"type": "final", "summary": summary})
