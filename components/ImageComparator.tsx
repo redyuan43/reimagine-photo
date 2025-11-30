@@ -80,7 +80,6 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
   }, [loadingCount, originalImage, modifiedImage]);
 
   const handleWheel: React.WheelEventHandler<HTMLDivElement> = (e) => {
-    e.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
     const cx = rect ? e.clientX - rect.left : 0;
     const cy = rect ? e.clientY - rect.top : 0;
@@ -162,7 +161,7 @@ export const ImageComparator: React.FC<ImageComparatorProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full select-none group bg-[#0b0b0c]"
+      className="relative w-full h-full select-none group bg-[#0b0b0c] overflow-hidden overscroll-none"
       onWheel={handleWheel}
       onPointerDown={onPointerDown}
       onTouchStart={onTouchStart}

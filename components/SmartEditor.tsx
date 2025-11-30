@@ -353,6 +353,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       }
     } catch (e) {}
 
+    setErrorMessage(null);
     setStatus('executing');
     setCurrentActiveStepIndex(0);
     setIsProcessing(true);
@@ -394,6 +395,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       if (!currentMaskBlob || !currentDisplayImage) return;
       
       const prompt = userInput.trim() || "Apply edits based on visual annotations.";
+      setErrorMessage(null);
       setIsProcessing(true);
       
       // Visual feedback: if we are in initial state, show 'executing' status
@@ -436,9 +438,15 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           setErrorMessage('遮罩编辑失败，请稍后重试');
           if (isInitial) setStatus('ready'); // Revert status if failed
       } finally {
-          setIsProcessing(false);
+        setIsProcessing(false);
       }
   };
+
+  useEffect(() => {
+    if (status === 'completed') {
+      setErrorMessage(null);
+    }
+  }, [status]);
 
   const handleConvertAndDownload = async () => {
     if (!currentDisplayImage) return;

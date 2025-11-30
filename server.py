@@ -669,74 +669,11 @@ def analyze_image_with_qwen3_vl_plus(image_path: str, verbose: bool = True, stre
         },
     ]
 
-    if OpenAI and api_key:
-        try:
-            client = OpenAI(api_key=api_key, base_url=base_url)
-            resp = client.chat.completions.create(
-                model="qwen3-vl-flash",
-                messages=messages,
-                temperature=0.1,
-                top_p=0.1,
-                max_tokens=2048,
-                stream=bool(stream_output),
-                extra_body={
-                    "enable_thinking": bool(enable_thinking),
-                    "thinking_budget": 81920,
-                },
-            )
-            print("使用 openai 客户端兼容模式调用")
-            text = ""
-            if stream_output:
-                print("AI分析中...\n")
-                first_chunk_time = None
-                total_chars = 0
-                chunk_count = 0
-                for chunk in resp:
-                    try:
-                        delta = chunk.choices[0].delta
-                        if delta and getattr(delta, "content", None):
-                            c = delta.content
-                            if first_chunk_time is None and c:
-                                first_chunk_time = time.time()
-                                if verbose:
-                                    ttfb = first_chunk_time - start_time
-                                    print(f"首字响应时间: {ttfb:.2f}秒")
-                            if c:
-                                print(c, end='', flush=True)
-                                text += c
-                                total_chars += len(c)
-                                chunk_count += 1
-                    except Exception:
-                        continue
-            else:
-                try:
-                    text = resp.choices[0].message.content or ""
-                except Exception:
-                    text = ""
-            if verbose:
-                end_time = time.time()
-                total_time = end_time - start_time
-                print("\n\n性能统计:")
-                print(f"   总耗时: {total_time:.2f}秒")
-                if stream_output:
-                    print(f"   输出字符: {total_chars}")
-                    print(f"   流式块数: {chunk_count}")
-                    print(f"   平均速度: {total_chars/total_time if total_time>0 else 0:.1f}字符/秒")
-                print(f"   完成时间: {datetime.now().strftime('%H:%M:%S')}")
-            cleaned = (text or "").strip()
-            if cleaned.startswith("```json"):
-                cleaned = cleaned[7:]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            return json.loads(cleaned.strip())
-        except Exception as e:
-            print(f"客户端调用失败: {e}")
-
-    # fallback to direct HTTP compatible endpoint
+    # 直接使用 HTTP 兼容模式调用一次
     url = base_url.rstrip("/") + "/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     body = {
-        "model": "qwen3-vl-flash",
+        "model": "qwen3-vl-plus",
         "messages": messages,
         "temperature": 0.1,
         "top_p": 0.1,
@@ -1006,7 +943,7 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
 
     base_url = os.getenv("DASHSCOPE_COMPAT_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
     api_key = os.getenv("DASHSCOPE_API_KEY")
-    logger.info("SSE 配置 模型=qwen3-vl-flash 接口=%s", base_url)
+    logger.info("SSE 配置 模型=qwen3-vl-plus接口=%s", base_url)
 
     async def gen():
         queue: asyncio.Queue = asyncio.Queue()
@@ -1030,7 +967,7 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
                     b64 = base64.b64encode(f.read()).decode("utf-8")
                 data_url = f"data:image/jpeg;base64,{b64}"
                 messages = [{"role":"user","content":[{"type":"image_url","image_url":{"url":data_url}},{"type":"text","text":get_enhanced_prompt()}]}]
-                resp = client.chat.completions.create(model="qwen3-vl-flash", messages=messages, stream=True, temperature=0.1, top_p=0.1, extra_body={"enable_thinking": False, "thinking_budget": 81920})
+                resp = client.chat.completions.create(model="qwen3-vl-plus", messages=messages, stream=True, temperature=0.1, top_p=0.1, extra_body={"enable_thinking": False, "thinking_budget": 81920})
                 logger.info("SSE 连接建立，开始流式分析")
                 for chunk in resp:
                     try:
@@ -1103,7 +1040,7 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
                 logger.info("SSE 最终总结长度=%d", len(summary or ""))
                 try:
                     params = {
-                        "model": "qwen3-vl-flash",
+                        "model": "qwen3-vl-plus",
                         "base_url": os.getenv("DASHSCOPE_COMPAT_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
                         "stream": True,
                     }
