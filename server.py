@@ -289,6 +289,11 @@ def _pil_to_bytes(img, fmt: str, quality: int | None = None, compression: int | 
                         pi.add_text(str(k), str(v))
                     except Exception:
                         pass
+                if extra_info.get('DateTime'):
+                    try:
+                        pi.add_text('CreationTime', str(extra_info['DateTime']))
+                    except Exception:
+                        pass
             img.save(buf, format='PNG', compress_level=c, pnginfo=pi)
         except Exception:
             img.save(buf, format='PNG', compress_level=c)
@@ -304,10 +309,19 @@ def _pil_to_bytes(img, fmt: str, quality: int | None = None, compression: int | 
             if extra_info:
                 desc = str(extra_info.get('Description') or '')
                 cr = str(extra_info.get('Copyright') or '')
+                artist = str(extra_info.get('Artist') or '')
+                software = str(extra_info.get('Software') or '')
+                dt = str(extra_info.get('DateTime') or '')
                 if desc:
-                    ifd[270] = desc  # ImageDescription
+                    ifd[270] = desc
                 if cr:
-                    ifd[33432] = cr  # Copyright
+                    ifd[33432] = cr
+                if artist:
+                    ifd[315] = artist
+                if software:
+                    ifd[305] = software
+                if dt:
+                    ifd[306] = dt
             img.save(buf, format='TIFF', tiffinfo=ifd)
         except Exception:
             img.save(buf, format='TIFF')
@@ -561,7 +575,11 @@ async def convert(
     resize_h: int | None = Form(None),
     color: str = Form("RGB"),
     copyright: str = Form(""),
-    metadata: str = Form("")
+    metadata: str = Form(""),
+    wm_text: str = Form(""),
+    wm_pos: str = Form("BR"),
+    wm_opacity: float = Form(0.0),
+    wm_size: int = Form(24),
 ):
     payload = await image.read()
     if not payload:
@@ -581,6 +599,37 @@ async def convert(
     except Exception:
         pass
 
+    try:
+        txt = (wm_text or "").strip()
+        pos = (wm_pos or "BR").upper()
+        op = float(wm_opacity or 0.0)
+        sz = int(wm_size or 24)
+        if txt and op > 0:
+            from PIL import ImageDraw, ImageFont, Image
+            base = img.convert("RGBA")
+            layer = Image.new("RGBA", base.size, (0,0,0,0))
+            d = ImageDraw.Draw(layer)
+            try:
+                fnt = ImageFont.truetype("arial.ttf", sz)
+            except Exception:
+                from PIL import ImageFont as _IF
+                fnt = _IF.load_default()
+            tw, th = d.textsize(txt, font=fnt)
+            margin = max(8, sz // 2)
+            if pos == "TL":
+                x = margin
+                y = margin
+            else:
+                x = base.size[0] - tw - margin
+                y = base.size[1] - th - margin
+            bg = int(255 * op * 0.6)
+            fg = int(255 * op)
+            d.rectangle([x - 6, y - 4, x + tw + 6, y + th + 4], fill=(0,0,0,bg))
+            d.text((x, y), txt, font=fnt, fill=(255,255,255,fg))
+            img = Image.alpha_composite(base, layer).convert("RGB")
+    except Exception:
+        pass
+
     # Basic metadata embedding (best-effort)
     info = {}
     if isinstance(metadata, str) and metadata.strip():
@@ -595,11 +644,26 @@ async def convert(
             pass
 
     extra = {}
-    if isinstance(metadata, str) and metadata.strip():
-        try:
-            extra["Description"] = metadata
-        except Exception:
-            pass
+    exif_obj = {}
+    try:
+        meta_obj = json.loads(metadata or "{}")
+        if isinstance(meta_obj, dict):
+            cam = meta_obj.get("camera")
+            exif_obj = meta_obj.get("exif") or {}
+            iptc_obj = meta_obj.get("iptc") or {}
+            if cam:
+                extra["Description"] = str(cam)
+            artist = exif_obj.get("Artist") or iptc_obj.get("Byline")
+            if artist:
+                extra["Artist"] = str(artist)
+            software = exif_obj.get("Software") or "Lumima Retouch"
+            if software:
+                extra["Software"] = str(software)
+            dt = exif_obj.get("DateTime")
+            if dt:
+                extra["DateTime"] = str(dt)
+    except Exception:
+        pass
     if isinstance(copyright, str) and copyright.strip():
         try:
             extra["Copyright"] = copyright

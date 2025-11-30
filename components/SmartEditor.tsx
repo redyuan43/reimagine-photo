@@ -34,6 +34,10 @@ interface SmartEditorProps {
   lang: 'zh' | 'en';
   startMode?: 'analyze' | 'direct';
   onGoToDownload?: (url: string | null) => void;
+  onStatusChange?: (s: 'analyzing'|'ready'|'executing'|'completed') => void;
+  onEditedResult?: (url: string) => void;
+  initialStatusOverride?: 'completed' | 'ready';
+  initialDisplayOverride?: string | null;
 }
 
 export const SmartEditor: React.FC<SmartEditorProps> = ({
@@ -44,6 +48,10 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   lang,
   startMode = 'analyze',
   onGoToDownload,
+  onStatusChange,
+  onEditedResult,
+  initialStatusOverride,
+  initialDisplayOverride,
 }) => {
   const [status, setStatus] = useState<'analyzing' | 'ready' | 'executing' | 'completed'>('analyzing');
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
@@ -147,6 +155,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
 
   // Initial Load & Analysis (Streaming)
   useEffect(() => {
+    if (initialStatusOverride) return;
     let isMounted = true;
     const init = async () => {
       if (!imageFile) return;
@@ -199,7 +208,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [imageFile, startMode]); 
+  }, [imageFile, startMode, initialStatusOverride]); 
 
   // Auto-scroll to bottom as items arrive
   useEffect(() => {
@@ -207,6 +216,10 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       listEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [planItems.length, status]);
+
+  useEffect(() => {
+    if (onStatusChange) onStatusChange(status);
+  }, [status, onStatusChange]);
 
   useEffect(() => {
     const el = rightPaneRef.current;
@@ -259,6 +272,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       newHistory.push(newImageUrl);
       setImageHistory(newHistory);
       setHistoryIndex(newHistory.length - 1);
+      if (onEditedResult) onEditedResult(newImageUrl);
   };
 
   const handleUndo = () => {
@@ -274,6 +288,17 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
   };
   
   const currentDisplayImage = historyIndex >= 0 ? imageHistory[historyIndex] : imagePreview;
+
+  useEffect(() => {
+    if (initialStatusOverride) {
+      setStatus(initialStatusOverride);
+      if (initialDisplayOverride) {
+        setImageHistory([initialDisplayOverride]);
+        setHistoryIndex(0);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- Action Handlers ---
 
@@ -658,7 +683,8 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
               <button
                 onClick={() => onGoToDownload?.(currentDisplayImage || imagePreview)}
                 title={dict.downloadResult}
-                className="p-2 rounded-full bg-amber-500 hover:bg-amber-600 text-black border border-amber-400 shadow-sm"
+                disabled={status !== 'completed'}
+                className={`p-2 rounded-full border shadow-sm ${status === 'completed' ? 'bg-amber-500 hover:bg-amber-600 text-black border-amber-400' : 'bg-white/10 text-gray-400 border-white/10 cursor-not-allowed'}`}
               >
                 <ArrowDownTrayIcon className="w-4 h-4" />
               </button>

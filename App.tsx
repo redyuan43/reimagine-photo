@@ -97,6 +97,10 @@ export default function App() {
     setPage('download');
   };
 
+  const returnToEditorCompleted = (url: string | null) => {
+    setPage('smartEditor');
+  };
+
   return (
     <div className="bg-[#0b0b0c] font-sans overflow-hidden selection:bg-blue-200 selection:text-blue-900" style={{ minHeight: '100vh' }}>
       <AnimatePresence mode="wait">
@@ -150,7 +154,7 @@ export default function App() {
                     ) : (
                       <DownloadPage
                         sourceUrl={downloadSourceUrl}
-                        onBack={() => setPage('smartEditor')}
+                        onBack={() => returnToEditorCompleted(downloadSourceUrl)}
                       />
                     )}
                   </motion.div>
