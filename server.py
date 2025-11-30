@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 import threading
+import mimetypes
 def _load_local_env():
     paths = [Path('.local.env'), Path('.env.local')]
     for p in paths:
@@ -42,6 +43,13 @@ except Exception:
     OpenAI = None
 
 try:
+    import dashscope
+    from dashscope import MultiModalConversation
+    dashscope.base_http_api_url = os.getenv("IMAGE_EDIT_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1")
+except Exception:
+    MultiModalConversation = None
+
+try:
     from enhanced_prompt import get_enhanced_prompt
 except ImportError:
     def get_enhanced_prompt():
@@ -58,12 +66,13 @@ app.add_middleware(
 )
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data")).resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGES_DIR = DATA_DIR / "images"
+LOGS_DIR = DATA_DIR / "logs"
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "app.db"
 LOG_PATH = DATA_DIR / "server.log"
-
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -177,6 +186,42 @@ def _save_image_bytes(filename: str, data: bytes) -> str:
         f.write(data)
     logger.info("Saved image to %s (%d bytes)", dest_path, len(data))
     return str(dest_path)
+
+def _file_metadata(path: str) -> dict:
+    try:
+        p = Path(path)
+        st = p.stat()
+        mime, _ = mimetypes.guess_type(str(p))
+        return {
+            "path": str(p.resolve()),
+            "exists": True,
+            "size_bytes": st.st_size,
+            "modified_at": datetime.utcfromtimestamp(st.st_mtime).isoformat(),
+            "mime": mime or "unknown",
+        }
+    except Exception:
+        return {"path": path, "exists": False}
+
+def _write_json_log(operation: str, input_path: str | None, output_urls: list[str] | None, params: dict | None, steps: list | None, summary: str | None, events: list[dict] | None) -> str:
+    payload = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "operation": operation,
+        "input": _file_metadata(input_path) if input_path else None,
+        "outputs": output_urls or [],
+        "params": params or {},
+        "steps": steps or [],
+        "summary": summary or "",
+        "events": events or [],
+    }
+    fname = f"log_{operation}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}.json"
+    fpath = LOGS_DIR / fname
+    try:
+        with open(fpath, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        logger.info("日志已写入 %s", fpath)
+    except Exception as exc:
+        logger.error("写入日志失败: %s", exc)
+    return str(fpath)
 
 
 def _insert_record(
@@ -642,6 +687,111 @@ async def analyze(image: UploadFile = File(...), prompt: str = Form("")):
         logger.warning("Failed to persist analyze record: %s", exc)
     return {"analysis": items, "summary": summary or ""}
 
+def _encode_image_to_data_url(file_path: str) -> str:
+    mime_type, _ = mimetypes.guess_type(file_path)
+    if not mime_type or not mime_type.startswith("image/"):
+        raise ValueError("Unsupported image type")
+    with open(file_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("utf-8")
+    return f"data:{mime_type};base64,{b64}"
+
+@app.post("/magic_edit")
+async def magic_edit(
+    image: UploadFile = File(...),
+    prompt: str = Form(""),
+    n: int = Form(1),
+    size: str = Form(""),
+    watermark: bool = Form(False),
+    negative_prompt: str = Form(""),
+    prompt_extend: bool = Form(True),
+    mask: UploadFile | None = File(None)
+):
+    if MultiModalConversation is None:
+        raise HTTPException(status_code=500, detail="dashscope SDK not available on server")
+    api_key = os.getenv("DASHSCOPE_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="DASHSCOPE_API_KEY not configured")
+
+    payload = await image.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="No image payload")
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=Path(image.filename or "image").suffix or ".png")
+    tmp.write(payload)
+    tmp.flush(); tmp.close()
+
+    mask_tmp_path = None
+    if mask is not None:
+        mask_bytes = await mask.read()
+        mt = tempfile.NamedTemporaryFile(delete=False, suffix=Path(mask.filename or "mask").suffix or ".png")
+        mt.write(mask_bytes); mt.flush(); mt.close()
+        mask_tmp_path = mt.name
+
+    try:
+        data_url = _encode_image_to_data_url(tmp.name)
+        contents: list[dict] = [{"image": data_url}]
+        if prompt:
+            contents.append({"text": prompt})
+        if mask_tmp_path:
+            contents.append({"image": _encode_image_to_data_url(mask_tmp_path)})
+        messages = [{"role": "user", "content": contents}]
+
+        model = os.getenv("IMAGE_EDIT_MODEL", "qwen-image-edit-plus")
+        kwargs = dict(
+            api_key=api_key,
+            model=model,
+            messages=messages,
+            stream=False,
+            n=n,
+            watermark=watermark,
+            negative_prompt=negative_prompt or " ",
+            prompt_extend=prompt_extend,
+        )
+        if n == 1 and size:
+            kwargs["size"] = size
+
+        resp = MultiModalConversation.call(**kwargs)
+        if getattr(resp, "status_code", None) == 200:
+            urls: list[str] = []
+            try:
+                for c in resp.output.choices[0].message.content:
+                    if isinstance(c, dict) and c.get("image"):
+                        urls.append(c["image"]) 
+            except Exception:
+                pass
+            if not urls:
+                raise HTTPException(status_code=502, detail="Model returned no image URLs")
+            try:
+                params = {
+                    "model": model,
+                    "n": n,
+                    "size": size,
+                    "watermark": watermark,
+                    "negative_prompt": negative_prompt,
+                    "prompt_extend": prompt_extend,
+                    "endpoint": os.getenv("IMAGE_EDIT_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1"),
+                    "has_mask": bool(mask_tmp_path),
+                }
+                steps = [{"text": prompt}] if prompt else []
+                events = [
+                    {"level": "INFO", "message": "magic_edit 完成", "outputs": len(urls)},
+                    {"level": "DEBUG", "message": "请求参数", "value": params},
+                ]
+                _write_json_log("magic_edit", tmp.name, urls, params, steps, prompt, events)
+            except Exception as exc:
+                logger.warning("magic_edit 写日志失败: %s", exc)
+            return {"urls": urls}
+        raise HTTPException(status_code=getattr(resp, "status_code", 500), detail=getattr(resp, "message", "image edit failed"))
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+        if mask_tmp_path:
+            try:
+                os.unlink(mask_tmp_path)
+            except Exception:
+                pass
+
 @app.post("/analyze_stream")
 async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
     payload = await image.read()
@@ -749,6 +899,20 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
                     fu = fallback_result.get("ui_analysis") if isinstance(fallback_result, dict) else None
                     summary = fallback_result.get("summary_ui") or fallback_result.get("summary") or ((fu or {}).get("summary_ui") or "")
                 logger.info("SSE 最终总结长度=%d", len(summary or ""))
+                try:
+                    params = {
+                        "model": "qwen3-vl-flash",
+                        "base_url": os.getenv("DASHSCOPE_COMPAT_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                        "stream": True,
+                    }
+                    steps = final_plans if isinstance(ui, dict) else []
+                    events = [
+                        {"level": "INFO", "message": "SSE 分析完成"},
+                        {"level": "DEBUG", "message": "已发送条目总数", "value": len(sent_ids)},
+                    ]
+                    _write_json_log("analyze_stream", tmp.name, [], params, steps, summary, events)
+                except Exception as exc:
+                    logger.warning("SSE 写日志失败: %s", exc)
                 push({"type": "final", "summary": summary})
             except Exception as e:
                 logger.warning("SSE 最终解析失败: %s", e)

@@ -10,6 +10,7 @@ export interface PlanItem {
   isCustom?: boolean;
   selectedOption?: string;
   options?: string[];
+  priority?: 'high' | 'medium' | 'low';
 }
 
 export interface AnalysisResponse {
