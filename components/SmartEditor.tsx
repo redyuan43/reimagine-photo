@@ -337,6 +337,21 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     }
 
     if (!sourceBlob) return;
+    let sendName = 'image.png';
+    try {
+      const name = (imageFile?.name || '').toLowerCase();
+      if (sourceBlob === imageFile && /\.(heic|heif)$/.test(name)) {
+        const { convertHeicClientBlob } = await import('../services/gemini');
+        sourceBlob = await convertHeicClientBlob(imageFile);
+        sendName = 'image.jpg';
+      } else if (/\.(jpg|jpeg)$/.test(name)) {
+        sendName = imageFile?.name || 'image.jpg';
+      } else if (/\.(png|webp)$/.test(name)) {
+        sendName = 'image.png';
+      } else if (/\.(dng|raw|arw|cr2|nef|raf|orf|rw2)$/.test(name)) {
+        sendName = 'image.jpg';
+      }
+    } catch (e) {}
 
     setStatus('executing');
     setCurrentActiveStepIndex(0);
@@ -352,13 +367,14 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     }, 2000); 
 
     try {
-        const resultUrl = await editImage(sourceBlob, activeSteps, instruction);
+        const resultUrl = await editImage(sourceBlob, activeSteps, instruction, '1K', sendName);
         
         clearInterval(progressInterval);
         
         if (resultUrl) {
             addToHistory(resultUrl);
             setIsHighRes(false);
+            setErrorMessage(null);
         }
         setStatus('completed');
         setCurrentActiveStepIndex(-1);
@@ -404,7 +420,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           };
           setPlanItems(prev => [...prev, maskStep]);
           
-          const resultUrl = await editImage(baseImageBlob, activeSteps, prompt, '1K', currentMaskBlob);
+          const resultUrl = await editImage(baseImageBlob, activeSteps, prompt, '1K', 'image.png');
           
           if (resultUrl) {
               addToHistory(resultUrl);
@@ -413,6 +429,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
               setCurrentMaskBlob(null);
               setUserInput('');
               setStatus('completed'); // Ensure we land in completed state
+              setErrorMessage(null);
           }
       } catch (e) {
           console.error(e);

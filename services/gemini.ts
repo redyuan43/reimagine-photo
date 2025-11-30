@@ -241,6 +241,12 @@ export const convertHeicClient = async (file: File): Promise<string> => {
   }
 };
 
+export const convertHeicClientBlob = async (file: File): Promise<Blob> => {
+  const heic2any = (await import('heic2any')).default as any;
+  const outputBlob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+  return outputBlob as Blob;
+};
+
 export const convertImage = async (
   imageBlob: Blob,
   format: 'jpeg' | 'png' | 'webp' | 'tiff',

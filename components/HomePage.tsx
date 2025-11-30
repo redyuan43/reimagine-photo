@@ -778,11 +778,12 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
       dragCounter.current = 0;
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
           const file = e.dataTransfer.files[0];
-          handleFileSelect(file);
+          if (file) handleFileSelect(file);
           e.dataTransfer.clearData();
       }
   };
-  const handleFileSelect = async (file: File) => {
+  const handleFileSelect = async (file?: File | null) => {
+    if (!file) return;
     const name = (file.name || '').toLowerCase();
     const isImageMime = (file.type || '').startsWith('image/');
     const isHeic = /\.(heic|heif)$/.test(name);
@@ -917,7 +918,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                              <input 
                                 type="file" 
                                 ref={fileInputRef}
-                                onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
+                                onChange={(e) => {
+                                  const f = e.target.files?.item(0);
+                                  if (f) handleFileSelect(f);
+                                }}
                                 className="hidden"
                                 accept="image/*,.heic,.heif,.dng,.raw,.arw,.cr2,.nef,.raf,.orf,.rw2"
                              />

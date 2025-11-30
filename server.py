@@ -100,6 +100,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("reimagine")
 
+from starlette.staticfiles import StaticFiles
+app.mount("/static", StaticFiles(directory=str(IMAGES_DIR)), name="static")
+
 
 class RecordModel(BaseModel):
     id: int
@@ -243,23 +246,23 @@ def _load_image_from_bytes(data: bytes, filename: str):
         from PIL import Image as _Image
     except Exception:
         raise HTTPException(status_code=500, detail="Pillow not available on server")
-    name = (filename or "image").lower()
-    if any(name.endswith(ext) for ext in [".heic", ".heif"]):
-        try:
-            import pillow_heif as _pheif
-            heif = _pheif.read_heif(data)
-            return _Image.frombytes(heif.mode, heif.size, heif.data)
-        except Exception:
-            raise HTTPException(status_code=500, detail="HEIC support not available")
-    if any(name.endswith(ext) for ext in [".dng", ".raw", ".arw", ".cr2", ".nef", ".raf", ".orf", ".rw2"]):
-        try:
-            import rawpy as _rawpy
-            import numpy as _np
-            with _rawpy.imread(io.BytesIO(data)) as raw:
-                rgb = raw.postprocess(use_camera_wb=True, no_auto_bright=True, output_bps=8, gamma=(1, 1))
-            return _Image.fromarray(rgb)
-        except Exception:
-            raise HTTPException(status_code=500, detail="RAW support not available")
+    # Try HEIC regardless of extension
+    try:
+        import pillow_heif as _pheif
+        heif = _pheif.read_heif(data)
+        return _Image.frombytes(heif.mode, heif.size, heif.data)
+    except Exception:
+        pass
+    # Try RAW regardless of extension
+    try:
+        import rawpy as _rawpy
+        import numpy as _np
+        with _rawpy.imread(io.BytesIO(data)) as raw:
+            rgb = raw.postprocess(use_camera_wb=True, no_auto_bright=True, output_bps=8, gamma=(1, 1))
+        return _Image.fromarray(rgb)
+    except Exception:
+        pass
+    # Fallback to common image types
     try:
         return _Image.open(io.BytesIO(data)).convert('RGB')
     except Exception:
@@ -286,6 +289,22 @@ def _pil_to_bytes(img, fmt: str, quality: int | None = None, compression: int | 
     else:
         raise HTTPException(status_code=400, detail="Unsupported output format")
     return buf.getvalue(), mime
+
+def _resize_image_max(img, max_side: int):
+    try:
+        w, h = img.size
+        m = int(max_side)
+        if w <= m and h <= m:
+            return img
+        if w >= h:
+            nw = m
+            nh = int(h * m / w)
+        else:
+            nh = m
+            nw = int(w * m / h)
+        return img.resize((nw, nh))
+    except Exception:
+        return img
 
 def _write_json_log(operation: str, input_path: str | None, output_urls: list[str] | None, params: dict | None, steps: list | None, summary: str | None, events: list[dict] | None, local_output_paths: Optional[list[str]] = None, record_id: Optional[int] = None) -> str:
     payload = {
@@ -857,7 +876,24 @@ async def magic_edit(
 
 
     try:
-        data_url = _encode_image_to_data_url(tmp.name)
+        try:
+            img = _load_image_from_bytes(payload, image.filename or "image.bin")
+        except Exception:
+            from PIL import Image as _Image
+            img = _Image.open(tmp.name)
+        img = _resize_image_max(img, 2048)
+        ext = (Path(image.filename or "").suffix or "").lower()
+        raw_heic_exts = {'.heic', '.heif', '.dng', '.raw', '.arw', '.cr2', '.nef', '.raf', '.orf', '.rw2'}
+        if ext in ['.jpg', '.jpeg'] or ext in raw_heic_exts:
+            fmt = 'jpeg'
+        else:
+            fmt = 'png'
+        bin_bytes, mime = _pil_to_bytes(img, fmt, quality=85 if fmt=='jpeg' else None)
+        b64 = base64.b64encode(bin_bytes).decode("utf-8")
+        if len(b64) > 19000000:
+            bin_bytes, mime = _pil_to_bytes(img, 'jpeg', quality=85)
+            b64 = base64.b64encode(bin_bytes).decode("utf-8")
+        data_url = f"data:{mime};base64,{b64}"
         contents: list[dict] = [{"image": data_url}]
         logger.info("magic_edit prompt len=%d", len(prompt or ""))
         print("magic_edit 提示词:", prompt)
@@ -936,20 +972,22 @@ async def magic_edit(
                     logger.warning("保存输出图片记录失败: %s", exc)
             except Exception as exc:
                 logger.warning("magic_edit 写日志失败: %s", exc)
-            return {"urls": urls}
-        # Non-200: graceful fallback to data URL of original
+            try:
+                served_urls: list[str] = []
+                if local_paths:
+                    base = os.getenv("SERVER_BASE_URL", "http://localhost:8000").rstrip("/")
+                    served_urls = [f"{base}/static/{Path(p).name}" for p in local_paths]
+                else:
+                    served_urls = urls
+                return {"urls": served_urls}
+            except Exception:
+                return {"urls": urls}
+        # Non-200: return error; input已规范化为PNG
         try:
-            logger.error("magic_edit error status=%s code=%s message=%s", getattr(resp, "status_code", None), getattr(resp, "code", None), getattr(resp, "message", None))
+            logger.error("magic_edit 非200 status=%s code=%s message=%s", getattr(resp, "status_code", None), getattr(resp, "code", None), getattr(resp, "message", None))
         except Exception:
             pass
-        try:
-            with open(tmp.name, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode("utf-8")
-            mime = mimetypes.guess_type(tmp.name)[0] or "image/png"
-            data_url = f"data:{mime};base64,{b64}"
-            return {"urls": [data_url]}
-        except Exception as exc:
-            raise HTTPException(status_code=getattr(resp, "status_code", 500), detail=getattr(resp, "message", "image edit failed"))
+        raise HTTPException(status_code=getattr(resp, "status_code", 500), detail=getattr(resp, "message", "image edit failed"))
     finally:
         try:
             os.unlink(tmp.name)
