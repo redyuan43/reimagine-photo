@@ -227,6 +227,9 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     let ticking = false;
     const onScroll = () => {
       if (ticking) return;
+      // During loading states, keep the header/summary stable (expanded) to prevent jitter
+      if (status === 'analyzing' || status === 'executing') return;
+      
       ticking = true;
       requestAnimationFrame(() => {
         const st = el.scrollTop;
@@ -240,7 +243,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     return () => {
       el.removeEventListener('scroll', onScroll);
     };
-  }, []);
+  }, [status]);
 
 
   useEffect(() => {
@@ -879,28 +882,31 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         )}
 
         <div className="p-4 border-t border-white/10 bg-[#121212] pb-8 z-20">
-          {(status === 'ready' || status === 'analyzing') && (
+          {(status === 'ready' || status === 'analyzing' || status === 'executing') && (
             <div className="space-y-3">
               <div className="flex gap-2 items-center">
                   <div className="relative flex-1">
                     <input
                       type="text"
                       placeholder={dict.addCustom}
-                      className="w-full pl-4 pr-12 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                      className="w-full pl-4 pr-12 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-amber-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       value={userInput}
                       onChange={(e) => setUserInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleUserSubmit()}
+                      disabled={status === 'executing'}
                     />
                     <button
                       onClick={handleUserSubmit}
-                      className="absolute right-2 top-1.5 p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-gray-200 transition-colors"
+                      disabled={status === 'executing'}
+                      className="absolute right-2 top-1.5 p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ArrowUpTrayIcon className="w-4 h-4 rotate-90" />
                     </button>
                   </div>
                    <button
                     onClick={startMasking}
-                    className="p-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-gray-300 hover:text-purple-400 hover:border-purple-300 hover:shadow-md transition-all"
+                    disabled={status === 'executing'}
+                    className="p-3 bg-[#1a1a1a] border border-white/10 rounded-xl text-gray-300 hover:text-purple-400 hover:border-purple-300 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     title={dict.annotateGuide}
                   >
                     <PaintBrushIcon className="w-5 h-5" />
@@ -908,13 +914,17 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                   <button
                     onClick={() => executeMagic()}
                     disabled={
-                       status === 'analyzing' || (planItems.filter((i) => i.checked).length === 0 && !userInput)
+                       status === 'analyzing' || status === 'executing' || (planItems.filter((i) => i.checked).length === 0 && !userInput)
                     }
-                    className="px-5 py-3 bg-gradient-to-r from-amber-400 to-purple-600 text-white rounded-xl font-bold text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-5 py-3 bg-gradient-to-r from-amber-400 to-purple-600 text-white rounded-xl font-bold text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px]"
                   >
                     {status === 'analyzing' ? (
                          <>
                             <BlinkingSmileIcon className="w-5 h-5 text-amber-400" /> {dict.analyzing}
+                         </>
+                    ) : status === 'executing' ? (
+                         <>
+                            <CpuChipIcon className="w-5 h-5 animate-pulse text-white" /> {dict.crafting}
                          </>
                     ) : (
                         <>
@@ -924,13 +934,6 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                     )}
                   </button>
               </div>
-            </div>
-          )}
-          {status === 'executing' && (
-            <div className="text-center py-4 text-gray-500">
-              <p className="animate-pulse">
-                {dict.crafting}
-              </p>
             </div>
           )}
           {status === 'completed' && (
