@@ -129,6 +129,13 @@ export const editImage = async (
   filename: string = "image.png",
   analysisSummary?: string
 ): Promise<string | null> => {
+  const sanitizeSummary = (txt?: string): string => {
+    const s = (txt || '').trim();
+    if (!s) return '';
+    const pat = /(建议|推荐|滤镜|建议效果|风格化推荐)/;
+    const parts = s.split(/(?<=[。！？!?;；\n])/);
+    return parts.filter(p => !pat.test(p)).join('').trim();
+  };
   const getImageSize = (blob: Blob): Promise<{ w: number; h: number }> => new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const img = new Image();
@@ -203,7 +210,8 @@ export const editImage = async (
       if (line) lines.push(`- ${line}`);
     }
     const combinedSteps = lines.join('\n');
-    const context = analysisSummary ? `\n[Image Context & Style]\n${analysisSummary}` : "";
+    const cleanSummary = sanitizeSummary(analysisSummary);
+    const context = cleanSummary ? `\n[Image Context & Style]\n${cleanSummary}` : "";
     const finalPrompt = [userInstruction?.trim(), combinedSteps, context].filter(Boolean).join('\n');
     console.log("Qwen Image Edit Prompt:", finalPrompt);
     fd.append('prompt', finalPrompt);

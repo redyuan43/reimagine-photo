@@ -66,10 +66,12 @@ except Exception:
     MultiModalConversation = None
 
 try:
-    from enhanced_prompt import get_enhanced_prompt
+    from enhanced_prompt import get_enhanced_prompt, sanitize_summary_ui
 except ImportError:
     def get_enhanced_prompt():
         return "你是一名图像分析专家，请对输入的图片进行专业级别的结构化解析。"
+    def sanitize_summary_ui(text: str) -> str:
+        return (text or "").strip()
 
 # 简化：不使用 dashscope 直接调用本地/指定推理服务
 
@@ -915,7 +917,7 @@ async def analyze(image: UploadFile = File(...), prompt: str = Form("")):
             pass
     except Exception as exc:
         logger.warning("Failed to persist analyze record: %s", exc)
-    return {"analysis": items, "summary": summary or ""}
+    return {"analysis": items, "summary": sanitize_summary_ui(summary or "")}
 
 def _encode_image_to_data_url(file_path: str) -> str:
     mime_type, _ = mimetypes.guess_type(file_path)
@@ -1176,6 +1178,7 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
                 if not summary and isinstance(fallback_result, dict):
                     fu = fallback_result.get("ui_analysis") if isinstance(fallback_result, dict) else None
                     summary = fallback_result.get("summary_ui") or fallback_result.get("summary") or ((fu or {}).get("summary_ui") or "")
+                summary = sanitize_summary_ui(summary or "")
                 logger.info("SSE 最终总结长度=%d", len(summary or ""))
                 try:
                     params = {

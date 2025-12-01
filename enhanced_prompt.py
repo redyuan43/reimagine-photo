@@ -4,6 +4,8 @@
 增强版图像分析提示词（双输出：UI 展示 + 生成模型简版提示）
 """
 
+import re
+
 ENHANCED_PROMPT = """
 你是一名世界级资深修图师和专业摄影师，具备计算机视觉分析能力。请完成以下任务：
 
@@ -105,13 +107,13 @@ ENHANCED_PROMPT = """
     },
     "summary_ui": "2-4 句话总结：照片类型、主要问题、技术性修复重点。注意：绝对不要包含滤镜建议或风格化推荐（这是用户选项），也不要提建议效果。"
   },
-  "gen_prompt": {
-    "thinking_process": "简述你的构思过程，包括意图、氛围设定等 (Thinking Mode)。",
-    "structured_prompt": "符合公式的最终提示词：[主体] + [环境] + [动作] + [风格] + [光影]... 若含人物，请包含面部锁定指令。",
-    "negative_prompt": "不需要的元素，如：low quality, blurry, deformed...",
-    "edit_instruction": "如果是局部重绘，提供具体的修改指令（如：'把背景里的路人去掉'）"
+    "gen_prompt": {
+      "thinking_process": "简述你的构思过程，包括意图、氛围设定等 (Thinking Mode)。",
+      "structured_prompt": "符合公式的最终提示词：[主体] + [环境] + [动作] + [风格] + [光影]... 若含人物，请包含面部锁定指令。",
+      "negative_prompt": "不需要的元素，如：low quality, blurry, deformed...",
+      "edit_instruction": "如果是局部重绘，提供具体的修改指令（如：'把背景里的路人去掉'）"
+    }
   }
-}
 
 具体分析要求：
 1) 照片基本信息：识别照片类型、主体、人脸数量、场景。
@@ -127,6 +129,12 @@ ENHANCED_PROMPT = """
 def get_enhanced_prompt():
     """返回增强版提示词"""
     return ENHANCED_PROMPT.strip()
+
+def sanitize_summary_ui(text: str) -> str:
+    pat = re.compile(r"(建议)")
+    parts = re.findall(r"[^。！？!?;；\n]+[。！？!?;；\n]?", str(text or ""))
+    kept = [s for s in parts if not pat.search(s)]
+    return ("".join(kept)).strip()
 
 
 if __name__ == "__main__":
