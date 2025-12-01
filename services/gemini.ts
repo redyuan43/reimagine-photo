@@ -126,7 +126,8 @@ export const editImage = async (
   activeSteps: PlanItem[],
   userInstruction: string,
   resolution: '1K' | '2K' | '4K' = '1K',
-  filename: string = "image.png"
+  filename: string = "image.png",
+  analysisSummary?: string
 ): Promise<string | null> => {
   const getImageSize = (blob: Blob): Promise<{ w: number; h: number }> => new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
@@ -202,7 +203,8 @@ export const editImage = async (
       if (line) lines.push(`- ${line}`);
     }
     const combinedSteps = lines.join('\n');
-    const finalPrompt = [userInstruction?.trim(), combinedSteps].filter(Boolean).join('\n');
+    const context = analysisSummary ? `\n[Image Context & Style]\n${analysisSummary}` : "";
+    const finalPrompt = [userInstruction?.trim(), combinedSteps, context].filter(Boolean).join('\n');
     console.log("Qwen Image Edit Prompt:", finalPrompt);
     fd.append('prompt', finalPrompt);
 
