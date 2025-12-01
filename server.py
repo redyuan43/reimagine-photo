@@ -729,7 +729,7 @@ def _parse_ui_to_plan_items(ui: dict):
     if options:
         items.append({
             "id": "filter_opt",
-            "problem": "Creative Styles",
+            "problem": "",
             "solution": primary.get("description") or "Apply Artistic Filter",
             "engine": "Filter",
             "category": "风格滤镜",

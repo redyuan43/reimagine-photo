@@ -30,7 +30,7 @@ const MOCK_ITEMS: PlanItem[] = [
     },
     {
       id: "filter_opt",
-      problem: "Creative Styles",
+      problem: "",
       solution: "Apply Artistic Filter",
       engine: "Filter",
       type: "adjustment",
@@ -181,6 +181,16 @@ export const editImage = async (
     });
     decorated.sort((a, b) => {
       if (b.w !== a.w) return b.w - a.w;
+      const ah = (a.s.priority || '').toLowerCase() === 'high';
+      const bh = (b.s.priority || '').toLowerCase() === 'high';
+      if (ah && bh) {
+        const ac = (a.s.category || '').toLowerCase();
+        const bc = (b.s.category || '').toLowerCase();
+        const aIsComp = ac.includes('构图') || ac.includes('composition');
+        const bIsComp = bc.includes('构图') || bc.includes('composition');
+        if (aIsComp && !bIsComp) return -1;
+        if (!aIsComp && bIsComp) return 1;
+      }
       return a.idx - b.idx;
     });
 
