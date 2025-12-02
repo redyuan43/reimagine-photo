@@ -1249,13 +1249,30 @@ def _normalize_size_param(size: str, n: int) -> Optional[str]:
         parts = s.split("*")
         w = int(parts[0])
         h = int(parts[1])
-        # 如果尺寸不超过 2048*2048，则保持照片默认尺寸
-        if w <= 2048 and h <= 2048:
-            return s
-        # 若超过 2048 的限制，则归一化到 2048*2048（模型只接受到此上限）
-        logger.info("magic_edit 归一化输出尺寸 %s -> 2048*2048", s)
-        return "2048*2048"
-    except Exception:
+
+        # 确保尺寸在有效范围内：[512*512, 2048*2048]
+        # 如果尺寸小于最小要求，则归一化到 512*512
+        if w < 512 or h < 512:
+            # 保持宽高比，计算缩放因子
+            scale = max(512 / w, 512 / h)
+            normalized_w = round(w * scale)
+            normalized_h = round(h * scale)
+            logger.info("magic_edit 归一化输出尺寸 %s -> %d*%d (太小，放大)", s, normalized_w, normalized_h)
+            return f"{normalized_w}*{normalized_h}"
+
+        # 如果尺寸超过最大限制，则归一化到 2048*2048
+        if w > 2048 or h > 2048:
+            # 保持宽高比，计算缩放因子
+            scale = min(2048 / w, 2048 / h)
+            normalized_w = round(w * scale)
+            normalized_h = round(h * scale)
+            logger.info("magic_edit 归一化输出尺寸 %s -> %d*%d (太大，缩小)", s, normalized_w, normalized_h)
+            return f"{normalized_w}*{normalized_h}"
+
+        # 如果尺寸在有效范围内，保持原样
+        return s
+    except Exception as e:
+        logger.warning("magic_edit 归一化尺寸失败: %s, 错误: %s", size, str(e))
         return None
 
 if __name__ == "__main__":

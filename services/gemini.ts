@@ -152,10 +152,30 @@ export const editImage = async (
       const w = img.naturalWidth || img.width;
       const h = img.naturalHeight || img.height;
       URL.revokeObjectURL(url);
-      resolve({ w, h });
+
+      // 确保尺寸符合API要求：[512*512, 2048*2048]
+      let normalizedW = w;
+      let normalizedH = h;
+
+      // 如果尺寸小于最小要求，则缩放到最小尺寸
+      if (w < 512 || h < 512) {
+        const scale = Math.max(512 / w, 512 / h);
+        normalizedW = Math.round(w * scale);
+        normalizedH = Math.round(h * scale);
+      }
+
+      // 确保不超过最大尺寸限制
+      if (normalizedW > 2048 || normalizedH > 2048) {
+        const scale = Math.min(2048 / normalizedW, 2048 / normalizedH);
+        normalizedW = Math.round(normalizedW * scale);
+        normalizedH = Math.round(normalizedH * scale);
+      }
+
+      resolve({ w: normalizedW, h: normalizedH });
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
+      // 默认返回1024*1024，符合API要求
       resolve({ w: 1024, h: 1024 });
     };
     img.src = url;
@@ -227,6 +247,7 @@ export const editImage = async (
 
     fd.append('n', '1');
     const { w, h } = await getImageSize(imageBlob);
+    console.log(`[DEBUG] 原始图像尺寸已标准化为: ${w}*${h}`);
     fd.append('size', `${w}*${h}`);
     fd.append('watermark', 'false');
     fd.append('prompt_extend', 'true');
