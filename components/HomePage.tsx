@@ -930,7 +930,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                                 className="w-14 h-14 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-white/70 transition-all overflow-hidden"
                              >
                                  {filePreview ? (
-                                     <img src={filePreview} className="w-full h-full object-cover" />
+                                     <img src={filePreview} className="w-full h-full object-contain" />
                                  ) : (
                                      <PhotoIcon className="w-6 h-6" />
                                  )}

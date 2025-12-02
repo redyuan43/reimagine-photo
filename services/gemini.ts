@@ -2,10 +2,13 @@
 import { AnalysisResponse, PlanItem } from "../types";
 
 // --- API Configuration ---
-// 使用当前主机名构建API地址，避免硬编码IP导致跨域
+// 使用页面当前协议与主机名构建API地址，避免HTTPS下的混合内容
 const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
-    return `http://${window.location.hostname}:8000`;
+    const proto = window.location.protocol || 'https:';
+    const host = window.location.hostname || 'localhost';
+    // 默认后端端口 8000；如需同源端口可改为 window.location.port
+    return `${proto}//${host}:8000`;
   }
   return 'http://localhost:8000';
 };
@@ -145,38 +148,18 @@ export const editImage = async (
     const parts = s.split(/(?<=[。！？!?;；\n])/);
     return parts.filter(p => !pat.test(p)).join('').trim();
   };
-  const getImageSize = (blob: Blob): Promise<{ w: number; h: number }> => new Promise((resolve) => {
+  const getImageSize = (blob: Blob): Promise<{ w: number; h: number } | null> => new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
       const w = img.naturalWidth || img.width;
       const h = img.naturalHeight || img.height;
       URL.revokeObjectURL(url);
-
-      // 确保尺寸符合API要求：[512*512, 2048*2048]
-      let normalizedW = w;
-      let normalizedH = h;
-
-      // 如果尺寸小于最小要求，则缩放到最小尺寸
-      if (w < 512 || h < 512) {
-        const scale = Math.max(512 / w, 512 / h);
-        normalizedW = Math.round(w * scale);
-        normalizedH = Math.round(h * scale);
-      }
-
-      // 确保不超过最大尺寸限制
-      if (normalizedW > 2048 || normalizedH > 2048) {
-        const scale = Math.min(2048 / normalizedW, 2048 / normalizedH);
-        normalizedW = Math.round(normalizedW * scale);
-        normalizedH = Math.round(normalizedH * scale);
-      }
-
-      resolve({ w: normalizedW, h: normalizedH });
+      resolve({ w, h });
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      // 默认返回1024*1024，符合API要求
-      resolve({ w: 1024, h: 1024 });
+      resolve(null);
     };
     img.src = url;
   });
@@ -246,9 +229,25 @@ export const editImage = async (
     fd.append('prompt', finalPrompt);
 
     fd.append('n', '1');
-    const { w, h } = await getImageSize(imageBlob);
-    console.log(`[DEBUG] 原始图像尺寸已标准化为: ${w}*${h}`);
-    fd.append('size', `${w}*${h}`);
+    const dims = await getImageSize(imageBlob);
+    if (dims && dims.w && dims.h) {
+      let w = dims.w, h = dims.h;
+      if (w < 512 || h < 512) {
+        console.log(`[DEBUG] 小图尺寸 (${w}*${h}) 低于API最小限制，跳过 size 参数`);
+      } else {
+        if (w > 2048 || h > 2048) {
+          const scale = Math.min(2048 / w, 2048 / h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+          console.log(`[DEBUG] 输出尺寸上限归一化: ${dims.w}*${dims.h} -> ${w}*${h}`);
+        } else {
+          console.log(`[DEBUG] 原始图像尺寸: ${w}*${h}`);
+        }
+        fd.append('size', `${w}*${h}`);
+      }
+    } else {
+      console.log('[DEBUG] 无法获取原始图像尺寸，跳过 size 参数');
+    }
     fd.append('watermark', 'false');
     fd.append('prompt_extend', 'true');
     const res = await fetch(`${getApiBaseUrl()}/magic_edit`, { method: 'POST', body: fd });

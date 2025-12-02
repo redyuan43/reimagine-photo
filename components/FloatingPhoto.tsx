@@ -93,7 +93,7 @@ export const FloatingPhoto: React.FC<FloatingPhotoProps> = ({
                 willChange: 'transform' 
             }}
         >
-            <img src={src} className="w-full h-full object-cover" alt="Floating decoration" draggable="false" />
+            <img src={src} className="w-full h-full object-contain" alt="Floating decoration" draggable="false" />
             <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent pointer-events-none" />
         </div>
       </motion.div>

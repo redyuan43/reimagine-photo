@@ -563,10 +563,7 @@ async def preview(image: UploadFile = File(...)):
         logger.error("[/preview] 无图片数据")
         raise HTTPException(status_code=400, detail="No image payload")
     img = _load_image_from_bytes(payload, image.filename or "image.bin")
-    try:
-        img.thumbnail((1600, 1600))
-    except Exception:
-        pass
+    # 保持原始尺寸，不进行任何缩放
     data, mime = _pil_to_bytes(img, 'png')
     return StreamingResponse(io.BytesIO(data), media_type=mime, headers={"Cache-Control": "no-cache"})
 
@@ -977,7 +974,7 @@ async def magic_edit(
         except Exception:
             from PIL import Image as _Image
             img = _Image.open(tmp.name)
-        img = _resize_image_max(img, 2048)
+        # 保持输入图像原始尺寸，不进行缩放或归一化
         ext = (Path(image.filename or "").suffix or "").lower()
         raw_heic_exts = {'.heic', '.heif', '.dng', '.raw', '.arw', '.cr2', '.nef', '.raf', '.orf', '.rw2'}
         if ext in ['.jpg', '.jpeg'] or ext in raw_heic_exts:
@@ -1249,30 +1246,21 @@ def _normalize_size_param(size: str, n: int) -> Optional[str]:
         parts = s.split("*")
         w = int(parts[0])
         h = int(parts[1])
-
-        # 确保尺寸在有效范围内：[512*512, 2048*2048]
-        # 如果尺寸小于最小要求，则归一化到 512*512
+        # 如果低于最小限制，直接忽略 size 参数，让模型自行处理
         if w < 512 or h < 512:
-            # 保持宽高比，计算缩放因子
-            scale = max(512 / w, 512 / h)
-            normalized_w = round(w * scale)
-            normalized_h = round(h * scale)
-            logger.info("magic_edit 归一化输出尺寸 %s -> %d*%d (太小，放大)", s, normalized_w, normalized_h)
-            return f"{normalized_w}*{normalized_h}"
-
-        # 如果尺寸超过最大限制，则归一化到 2048*2048
+            logger.info("magic_edit 跳过过小尺寸 size=%s (模型最小512)", s)
+            return None
+        # 仅当超过最大限制时按比例缩小到不超过 2048
         if w > 2048 or h > 2048:
-            # 保持宽高比，计算缩放因子
             scale = min(2048 / w, 2048 / h)
-            normalized_w = round(w * scale)
-            normalized_h = round(h * scale)
-            logger.info("magic_edit 归一化输出尺寸 %s -> %d*%d (太大，缩小)", s, normalized_w, normalized_h)
-            return f"{normalized_w}*{normalized_h}"
-
-        # 如果尺寸在有效范围内，保持原样
+            nw = round(w * scale)
+            nh = round(h * scale)
+            logger.info("magic_edit 输出尺寸上限归一化 %s -> %d*%d", s, nw, nh)
+            return f"{nw}*{nh}"
+        # 否则保持原样（不设最小限制）
         return s
     except Exception as e:
-        logger.warning("magic_edit 归一化尺寸失败: %s, 错误: %s", size, str(e))
+        logger.warning("magic_edit 尺寸参数解析失败: %s, 错误: %s", size, str(e))
         return None
 
 if __name__ == "__main__":

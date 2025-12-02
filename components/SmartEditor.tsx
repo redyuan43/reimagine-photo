@@ -639,7 +639,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
                      onClick={() => handleFilterSelect(filterItem.id, opt)}
                      className={`relative group flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${filterItem.selectedOption === opt ? 'border-purple-500 scale-105' : 'border-transparent hover:border-white/50'}`}
                    >
-                      <img src={imagePreview || ''} style={getFilterStyle(opt)} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                      <img src={imagePreview || ''} style={getFilterStyle(opt)} className="w-full h-full object-contain opacity-80 group-hover:opacity-100 transition-opacity" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end justify-center p-1">
                           <span className="text-[10px] font-medium text-white text-center leading-tight line-clamp-2">{opt}</span>
                       </div>
