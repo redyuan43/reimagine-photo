@@ -1,6 +1,15 @@
 
 import { AnalysisResponse, PlanItem } from "../types";
 
+// --- API Configuration ---
+// 使用当前主机名构建API地址，避免硬编码IP导致跨域
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    return `http://${window.location.hostname}:8000`;
+  }
+  return 'http://localhost:8000';
+};
+
 // --- MOCK DATA ---
 
 const MOCK_ITEMS: PlanItem[] = [
@@ -55,7 +64,7 @@ export const checkAndRequestApiKey = async (): Promise<boolean> => {
 // --- Helper (Unchanged) ---
 export const urlToBlob = async (url: string): Promise<Blob> => {
   const isHttp = /^https?:\/\//i.test(url);
-  const proxied = isHttp ? `http://localhost:8000/proxy_image?url=${encodeURIComponent(url)}` : url;
+  const proxied = isHttp ? `${getApiBaseUrl()}/proxy_image?url=${encodeURIComponent(url)}` : url;
   const res = await fetch(proxied);
   return await res.blob();
 };
@@ -70,7 +79,7 @@ export const analyzeImage = async (
     const fd = new FormData();
     fd.append('image', file);
     fd.append('prompt', '');
-    const sse = await fetch('http://localhost:8000/analyze_stream', { method: 'POST', body: fd });
+    const sse = await fetch(`${getApiBaseUrl()}/analyze_stream`, { method: 'POST', body: fd });
     if (sse.ok && sse.headers.get('content-type')?.includes('text/event-stream')) {
       const reader = sse.body!.getReader();
       const decoder = new TextDecoder();
@@ -97,7 +106,7 @@ export const analyzeImage = async (
       }
       return summary;
     }
-    const res = await fetch('http://localhost:8000/analyze', { method: 'POST', body: fd });
+    const res = await fetch(`${getApiBaseUrl()}/analyze`, { method: 'POST', body: fd });
     if (res.ok) {
       const data = await res.json() as { analysis?: PlanItem[], summary?: string };
       const items = data.analysis || [];
@@ -221,7 +230,7 @@ export const editImage = async (
     fd.append('size', `${w}*${h}`);
     fd.append('watermark', 'false');
     fd.append('prompt_extend', 'true');
-    const res = await fetch('http://localhost:8000/magic_edit', { method: 'POST', body: fd });
+    const res = await fetch(`${getApiBaseUrl()}/magic_edit`, { method: 'POST', body: fd });
     console.log('magic_edit response status:', res.status, res.ok);
     if (res.ok) {
       const data = await res.json() as { urls?: string[] };
@@ -246,7 +255,7 @@ export const editImage = async (
 export const getPreviewForUpload = async (file: File): Promise<string> => {
   const fd = new FormData();
   fd.append('image', file);
-  const res = await fetch('http://localhost:8000/preview', { method: 'POST', body: fd });
+  const res = await fetch(`${getApiBaseUrl()}/preview`, { method: 'POST', body: fd });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(txt || `preview failed ${res.status}`);
@@ -285,7 +294,7 @@ export const convertImage = async (
   fd.append('format', format);
   if (typeof opts.quality === 'number') fd.append('quality', String(opts.quality));
   if (typeof opts.compression === 'number') fd.append('compression', String(opts.compression));
-  const res = await fetch('http://localhost:8000/convert', { method: 'POST', body: fd });
+  const res = await fetch(`${getApiBaseUrl()}/convert`, { method: 'POST', body: fd });
   if (!res.ok) throw new Error(await res.text());
   return await res.blob();
 };

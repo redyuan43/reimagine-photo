@@ -556,8 +556,11 @@ def fetch_logs(lines: int = 200):
 
 @app.post("/preview")
 async def preview(image: UploadFile = File(...)):
+    logger.info("[/preview] 收到预览请求")
     payload = await image.read()
+    logger.info("[/preview] 图片字节数: %d", len(payload or b""))
     if not payload:
+        logger.error("[/preview] 无图片数据")
         raise HTTPException(status_code=400, detail="No image payload")
     img = _load_image_from_bytes(payload, image.filename or "image.bin")
     try:
@@ -583,8 +586,11 @@ async def convert(
     wm_opacity: float = Form(0.0),
     wm_size: int = Form(24),
 ):
+    logger.info("[/convert] 收到图片转换请求")
     payload = await image.read()
+    logger.info("[/convert] 图片字节数: %d, 格式: %s, 质量: %d", len(payload or b""), format, quality)
     if not payload:
+        logger.error("[/convert] 无图片数据")
         raise HTTPException(status_code=400, detail="No image payload")
     img = _load_image_from_bytes(payload, image.filename or "image.bin")
     try:
@@ -876,10 +882,13 @@ def analyze_image_with_qwen3_vl_plus(image_path: str, verbose: bool = True, stre
 
 @app.post("/analyze")
 async def analyze(image: UploadFile = File(...), prompt: str = Form("")):
-    print("收到分析请求")
+    logger.info("="*60)
+    logger.info("[/analyze] 收到分析请求")
+    logger.info("[/analyze] 请求来源: 前端")
     buf = await image.read()
-    print(f"接收字节: {len(buf)}")
-    logger.info("Analyze request received bytes=%d prompt_len=%d", len(buf), len(prompt or ""))
+    logger.info("[/analyze] 接收图片字节数: %d", len(buf))
+    logger.info("[/analyze] 提示词长度: %d", len(prompt or ""))
+    logger.info("="*60)
     saved_image_path = _save_image_bytes(image.filename or "image.png", buf)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     tmp.write(buf)
@@ -937,14 +946,23 @@ async def magic_edit(
     negative_prompt: str = Form(""),
     prompt_extend: bool = Form(True),
 ):
+    logger.info("="*60)
+    logger.info("[/magic_edit] 收到图像编辑请求")
+    logger.info("[/magic_edit] 请求来源: 前端")
+
     if MultiModalConversation is None:
+        logger.error("[/magic_edit] dashscope SDK 不可用")
         raise HTTPException(status_code=500, detail="dashscope SDK not available on server")
     api_key = os.getenv("DASHSCOPE_API_KEY")
     if not api_key:
+        logger.error("[/magic_edit] DASHSCOPE_API_KEY 未配置")
         raise HTTPException(status_code=500, detail="DASHSCOPE_API_KEY not configured")
 
     payload = await image.read()
-    logger.info("magic_edit received bytes=%d", len(payload or b""))
+    logger.info("[/magic_edit] 图片字节数: %d", len(payload or b""))
+    logger.info("[/magic_edit] 提示词: %s", prompt[:100] if prompt else "(无)")
+    logger.info("[/magic_edit] 参数 n=%d, size=%s, watermark=%s", n, size, watermark)
+    logger.info("="*60)
     if not payload:
         raise HTTPException(status_code=400, detail="No image payload")
     original_local_path = _save_image_bytes(image.filename or "image.png", payload)
@@ -1075,7 +1093,11 @@ async def magic_edit(
 @app.post("/analyze_stream")
 async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
     payload = await image.read()
-    logger.info("SSE 收到分析请求 bytes=%d", len(payload))
+    logger.info("="*60)
+    logger.info("[/analyze_stream] SSE 收到分析请求")
+    logger.info("[/analyze_stream] 图片字节数: %d", len(payload))
+    logger.info("[/analyze_stream] 请求来源: 前端")
+    logger.info("="*60)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     tmp.write(payload)
     tmp.flush()
@@ -1238,5 +1260,12 @@ def _normalize_size_param(size: str, n: int) -> Optional[str]:
 
 if __name__ == "__main__":
     import uvicorn
+    print("="*60)
     print("Starting server on http://0.0.0.0:8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print("Server will listen on all network interfaces (0.0.0.0)")
+    print("Accessible via:")
+    print("  - http://localhost:8000")
+    print("  - http://0.0.0.0:8000")
+    print("  - http://127.0.0.1:8000")
+    print("="*60)
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

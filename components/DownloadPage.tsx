@@ -109,7 +109,8 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ sourceUrl, onConfirm
         fd.append('wm_opacity', String(wmOpacity));
         fd.append('wm_size', String(wmSize));
       }
-      const res = await fetch('http://localhost:8000/convert', { method: 'POST', body: fd });
+      const apiUrl = `http://${window.location.hostname}:8000/convert`;
+const res = await fetch(apiUrl, { method: 'POST', body: fd });
       if (!res.ok) throw new Error(await res.text());
       const out = await res.blob();
       const url = URL.createObjectURL(out);
