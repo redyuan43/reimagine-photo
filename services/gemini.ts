@@ -2,13 +2,22 @@
 import { AnalysisResponse, PlanItem } from "../types";
 
 // --- API Configuration ---
-// 使用页面当前协议与主机名构建API地址，避免HTTPS下的混合内容
+// 统一后端地址选择策略：
+// 1) 优先使用 VITE_API_BASE_URL（生产建议同源HTTPS，或指向API网关）
+// 2) 其次在 HTTPS 下使用同源（避免混合内容），在 HTTP 下使用 host:8000
 const getApiBaseUrl = () => {
+  const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    return envUrl.replace(/\/$/, '');
+  }
   if (typeof window !== 'undefined') {
     const proto = window.location.protocol || 'https:';
     const host = window.location.hostname || 'localhost';
-    // 默认后端端口 8000；如需同源端口可改为 window.location.port
-    return `${proto}//${host}:8000`;
+    const port = window.location.port ? `:${window.location.port}` : '';
+    if (proto === 'https:') {
+      return `${proto}//${host}${port}`;
+    }
+    return `http://${host}:8000`;
   }
   return 'http://localhost:8000';
 };
