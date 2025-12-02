@@ -26,3 +26,22 @@ dist-ssr
 .env.local
 .local.env
 data/*
+
+# Python virtual environment
+venv/
+.env
+.venv/
+
+# Runtime PID files
+*.pid
+.backend.pid
+.frontend.pid
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Spec workflow
+.spec-workflow/
