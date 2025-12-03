@@ -374,6 +374,22 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
     }
 
     if (!sourceBlob) return;
+    // Client-side safety: if original file is huge, pre-shrink via backend convert to avoid oversize data-url
+    if ((sourceBlob as any)?.size && (sourceBlob as any).size > 10 * 1024 * 1024) {
+      try {
+        const fd = new FormData();
+        fd.append('image', sourceBlob, 'source.bin');
+        fd.append('format', 'jpeg');
+        fd.append('quality', '80');
+        fd.append('max_side', '2048');
+        const apiUrl = `${window.location.protocol}//${window.location.hostname}:8000/api/convert`;
+        const res = await fetch(apiUrl, { method: 'POST', body: fd });
+        if (res.ok) {
+          const blob = await res.blob();
+          sourceBlob = blob;
+        }
+      } catch {}
+    }
     let sendName = 'image.png';
     try {
       const name = (imageFile?.name || '').toLowerCase();

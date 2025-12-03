@@ -563,7 +563,7 @@ async def preview(image: UploadFile = File(...)):
         logger.error("[/preview] 无图片数据")
         raise HTTPException(status_code=400, detail="No image payload")
     img = _load_image_from_bytes(payload, image.filename or "image.bin")
-    # 保持原始尺寸，不进行任何缩放
+    img = _resize_image_max(img, 2048)
     data, mime = _pil_to_bytes(img, 'png')
     return StreamingResponse(io.BytesIO(data), media_type=mime, headers={"Cache-Control": "no-cache"})
 
@@ -575,6 +575,7 @@ async def convert(
     compression: int = Form(6),
     resize_w: int | None = Form(None),
     resize_h: int | None = Form(None),
+    max_side: int | None = Form(None),
     color: str = Form("RGB"),
     copyright: str = Form(""),
     metadata: str = Form(""),
@@ -591,7 +592,9 @@ async def convert(
         raise HTTPException(status_code=400, detail="No image payload")
     img = _load_image_from_bytes(payload, image.filename or "image.bin")
     try:
-        if resize_w and resize_h and resize_w > 0 and resize_h > 0:
+        if isinstance(max_side, int) and max_side and max_side > 0:
+            img = _resize_image_max(img, int(max_side))
+        elif resize_w and resize_h and resize_w > 0 and resize_h > 0:
             img = img.resize((int(resize_w), int(resize_h)))
     except Exception:
         pass
@@ -887,8 +890,14 @@ async def analyze(image: UploadFile = File(...), prompt: str = Form("")):
     logger.info("[/analyze] 提示词长度: %d", len(prompt or ""))
     logger.info("="*60)
     saved_image_path = _save_image_bytes(image.filename or "image.png", buf)
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    tmp.write(buf)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+    try:
+        img = _load_image_from_bytes(buf, image.filename or "image.bin")
+        img = _resize_image_max(img, 2048)
+        bin_bytes, _ = _pil_to_bytes(img, 'jpeg', quality=85)
+        tmp.write(bin_bytes)
+    except Exception:
+        tmp.write(buf)
     tmp.flush()
     tmp.close()
 
@@ -975,18 +984,21 @@ async def magic_edit(
         except Exception:
             from PIL import Image as _Image
             img = _Image.open(tmp.name)
-        # 保持输入图像原始尺寸，不进行缩放或归一化
-        ext = (Path(image.filename or "").suffix or "").lower()
-        raw_heic_exts = {'.heic', '.heif', '.dng', '.raw', '.arw', '.cr2', '.nef', '.raf', '.orf', '.rw2'}
-        if ext in ['.jpg', '.jpeg'] or ext in raw_heic_exts:
-            fmt = 'jpeg'
-        else:
-            fmt = 'png'
-        bin_bytes, mime = _pil_to_bytes(img, fmt, quality=85 if fmt=='jpeg' else None)
+        img = _resize_image_max(img, 2048)
+        max_base64 = 10485760
+        max_bin = int(max_base64 * 3 / 4) - 8192
+        q = 85
+        bin_bytes, mime = _pil_to_bytes(img, 'jpeg', quality=q)
+        while len(bin_bytes) > max_bin and q > 50:
+            q -= 10
+            bin_bytes, mime = _pil_to_bytes(img, 'jpeg', quality=q)
+        if len(bin_bytes) > max_bin:
+            for side in [1600, 1280, 1024, 896, 768, 640, 512]:
+                img = _resize_image_max(img, side)
+                bin_bytes, mime = _pil_to_bytes(img, 'jpeg', quality=q)
+                if len(bin_bytes) <= max_bin:
+                    break
         b64 = base64.b64encode(bin_bytes).decode("utf-8")
-        if len(b64) > 19000000:
-            bin_bytes, mime = _pil_to_bytes(img, 'jpeg', quality=85)
-            b64 = base64.b64encode(bin_bytes).decode("utf-8")
         data_url = f"data:{mime};base64,{b64}"
         contents: list[dict] = [{"image": data_url}]
         logger.info("magic_edit prompt len=%d", len(prompt or ""))
@@ -1110,8 +1122,14 @@ async def analyze_stream(image: UploadFile = File(...), prompt: str = Form("")):
     logger.info("[/analyze_stream] 图片字节数: %d", len(payload))
     logger.info("[/analyze_stream] 请求来源: 前端")
     logger.info("="*60)
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    tmp.write(payload)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+    try:
+        img = _load_image_from_bytes(payload, image.filename or "image.bin")
+        img = _resize_image_max(img, 2048)
+        bin_bytes, _ = _pil_to_bytes(img, 'jpeg', quality=85)
+        tmp.write(bin_bytes)
+    except Exception:
+        tmp.write(payload)
     tmp.flush()
     tmp.close()
     logger.info("SSE 临时文件=%s", tmp.name)

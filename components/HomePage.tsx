@@ -791,8 +791,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
     const isSpecial = isHeic || isRaw;
     
     setSelectedFile(file);
+    setIsLoading(true);
     if (isImageMime && !isSpecial) {
       setFilePreview(URL.createObjectURL(file));
+      setIsLoading(false);
       return;
     }
     try {
@@ -800,15 +802,18 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
         const { convertHeicClient } = await import('../services/gemini');
         const previewUrl = await convertHeicClient(file);
         setFilePreview(previewUrl);
+        setIsLoading(false);
         (window as any)._previewError = undefined;
         return;
       }
       const { getPreviewForUpload } = await import('../services/gemini');
       const previewUrl = await getPreviewForUpload(file);
       setFilePreview(previewUrl);
+      setIsLoading(false);
       (window as any)._previewError = undefined;
     } catch (e) {
       setFilePreview('');
+      setIsLoading(false);
       (window as any)._previewError = 'HEIC/RAW 预览需要后端依赖，请安装 pillow-heif/rawpy';
     }
   };
@@ -953,9 +958,14 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                           <button 
                             onClick={() => selectedFile && onStart(selectedFile, promptText, 'analyze')}
                             disabled={!selectedFile || isLoading}
-                            className="h-14 px-6 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-base transition-all flex items-center gap-2 shadow-lg disabled:bg-white/10 disabled:text-white/20 disabled:shadow-none disabled:cursor-not-allowed"
+                            className="h-14 px-6 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-base transition-all flex items-center gap-2 shadow-lg disabled:bg-white/10 disabled:text-white/20 disabled:shadow-none disabled:cursor-not-allowed relative overflow-hidden"
                           >
-                            <span>{lang === 'zh' ? '分析' : 'Analyze'}</span>
+                            <span className={`transition-opacity duration-200 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>{lang === 'zh' ? '分析' : 'Analyze'}</span>
+                            {isLoading && (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <BlinkingSmileIcon className="w-6 h-6 text-amber-500" />
+                              </div>
+                            )}
                           </button>
                           <button 
                              ref={generateBtnRef}
