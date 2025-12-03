@@ -12,7 +12,7 @@ from pathlib import Path
 from uuid import uuid4
 from typing import List, Optional
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from starlette.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -935,6 +935,7 @@ def _encode_image_to_data_url(file_path: str) -> str:
 
 @app.post("/magic_edit")
 async def magic_edit(
+    request: Request,
     image: UploadFile = File(...),
     prompt: str = Form(""),
     n: int = Form(1),
@@ -1068,8 +1069,22 @@ async def magic_edit(
             try:
                 served_urls: list[str] = []
                 if local_paths:
-                    base = os.getenv("SERVER_BASE_URL", "http://localhost:8000").rstrip("/")
+                    # 动态构建基础URL：优先使用环境变量，其次使用请求的Host头
+                    base = os.getenv("SERVER_BASE_URL")
+                    if not base:
+                        # 从请求头中获取Host，构建正确的基础URL
+                        host = request.headers.get("host", "localhost:8000")
+                        # 检查是否是HTTPS请求
+                        forwarded_proto = request.headers.get("x-forwarded-proto", "http")
+                        # 也检查是否有 X-Forwarded-Host 头
+                        forwarded_host = request.headers.get("x-forwarded-host", host)
+                        base = f"{forwarded_proto}://{forwarded_host}"
+                        # 记录诊断信息
+                        logger.info("[/magic_edit] Host诊断: host=%s, forwarded_host=%s, proto=%s",
+                                   host, forwarded_host, forwarded_proto)
+                    base = base.rstrip("/")
                     served_urls = [f"{base}/static/{Path(p).name}" for p in local_paths]
+                    logger.info("[/magic_edit] 生成静态资源URL: %s", served_urls[0] if served_urls else "无")
                 else:
                     served_urls = urls
                 return {"urls": served_urls}

@@ -11,7 +11,18 @@ const getApiBaseUrl = () => {
     return envUrl.replace(/\/$/, '');
   }
   if (typeof window !== 'undefined') {
-    return `${window.location.origin}/api`;
+    // 自动检测当前访问地址，构建正确的后端URL
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const port = window.location.port;
+    // 假设后端运行在当前主机的8000端口
+    const backendPort = '8000';
+    // 如果当前就是8000端口，说明前端也是通过FastAPI服务的，直接使用同源
+    if (port === '8000' || port === '') {
+      return `${window.location.origin}/api`;
+    }
+    // 否则，使用当前hostname的8000端口
+    return `${protocol}//${hostname}:${backendPort}/api`;
   }
   return 'http://localhost:3000/api';
 };
