@@ -1263,6 +1263,21 @@ def _normalize_size_param(size: str, n: int) -> Optional[str]:
         logger.warning("magic_edit 尺寸参数解析失败: %s, 错误: %s", size, str(e))
         return None
 
+class ApiPrefixMiddleware:
+    def __init__(self, app, prefix: str = "/api"):
+        self.app = app
+        self.prefix = prefix
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            path = scope.get("path") or ""
+            if path == self.prefix:
+                scope["path"] = "/"
+            elif path.startswith(self.prefix + "/"):
+                scope["path"] = path[len(self.prefix):]
+        return await self.app(scope, receive, send)
+
+app = ApiPrefixMiddleware(app)
+
 if __name__ == "__main__":
     import uvicorn
     print("="*60)

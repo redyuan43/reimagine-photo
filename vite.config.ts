@@ -8,8 +8,15 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
-        // 添加 allowedHosts 配置以解决 "Blocked request" 错误
-        allowedHosts: ['lumina.yuanspaces.com'],
+        allowedHosts: true,
+        proxy: {
+          '/api': {
+            target: 'http://localhost:8000',
+            changeOrigin: true,
+            ws: true,
+            rewrite: (path) => path.replace(/^\/api/, '')
+          }
+        }
       },
       plugins: [react()],
       define: {

@@ -11,15 +11,9 @@ const getApiBaseUrl = () => {
     return envUrl.replace(/\/$/, '');
   }
   if (typeof window !== 'undefined') {
-    const proto = window.location.protocol || 'https:';
-    const host = window.location.hostname || 'localhost';
-    const port = window.location.port ? `:${window.location.port}` : '';
-    if (proto === 'https:') {
-      return `${proto}//${host}${port}`;
-    }
-    return `http://${host}:8000`;
+    return `${window.location.origin}/api`;
   }
-  return 'http://localhost:8000';
+  return 'http://localhost:3000/api';
 };
 
 // --- MOCK DATA ---
@@ -259,7 +253,7 @@ export const editImage = async (
     }
     fd.append('watermark', 'false');
     fd.append('prompt_extend', 'true');
-    const res = await fetch(`${getApiBaseUrl()}/magic_edit`, { method: 'POST', body: fd });
+      const res = await fetch(`${getApiBaseUrl()}/magic_edit`, { method: 'POST', body: fd });
     console.log('magic_edit response status:', res.status, res.ok);
     if (res.ok) {
       const data = await res.json() as { urls?: string[] };
