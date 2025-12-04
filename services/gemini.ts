@@ -5,7 +5,7 @@ import { AnalysisResponse, PlanItem } from "../types";
 // 统一后端地址选择策略：
 // 1) 优先使用 VITE_API_BASE_URL（生产建议同源HTTPS，或指向API网关）
 // 2) 其次在 HTTPS 下使用同源（避免混合内容），在 HTTP 下使用 host:8000
-const getApiBaseUrl = () => {
+export const getApiBaseUrl = () => {
   const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
   if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
     return envUrl.replace(/\/$/, '');
@@ -162,6 +162,34 @@ export const editImage = async (
     const parts = s.split(/(?<=[。！？!?;；\n])/);
     return parts.filter(p => !pat.test(p)).join('').trim();
   };
+  const containsFaceLock = (txt?: string): boolean => {
+    const s = (txt || '').toLowerCase();
+    const keys = [
+      '面部特征不变',
+      '保留原始面部',
+      '面部锁定',
+      '面部固定',
+      '保持人脸不变',
+      'face lock',
+      'facial area'
+    ];
+    return keys.some(k => s.includes(k.toLowerCase()));
+  };
+  const isPortrait = (txt?: string, items?: PlanItem[]): boolean => {
+    const t = (txt || '').toLowerCase();
+    const kw = ['人像','人物','人脸','肖像','女性','男性','男','女','脸','面部'];
+    if (kw.some(k => t.includes(k))) return true;
+    for (const it of (items || [])) {
+      const c = (it.category || '').toLowerCase();
+      const p = (it.problem || '').toLowerCase();
+      const s = (it.solution || '').toLowerCase();
+      if (c.includes('面部') || p.includes('面部') || s.includes('面部')) return true;
+      if (c.includes('skin') || p.includes('skin') || s.includes('skin')) return true;
+      if (c.includes('肤') || p.includes('肤') || s.includes('肤')) return true;
+      if (c.includes('face') || p.includes('face') || s.includes('face')) return true;
+    }
+    return false;
+  };
   const getImageSize = (blob: Blob): Promise<{ w: number; h: number } | null> => new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const img = new Image();
@@ -238,7 +266,9 @@ export const editImage = async (
     const combinedSteps = lines.join('\n');
     const cleanSummary = sanitizeSummary(analysisSummary);
     const context = cleanSummary ? `\n[Image Context & Style]\n${cleanSummary}` : "";
-    const finalPrompt = [userInstruction?.trim(), combinedSteps, context].filter(Boolean).join('\n');
+    const needFaceLock = isPortrait(analysisSummary, activeSteps) && !containsFaceLock(userInstruction);
+    const faceLock = needFaceLock ? '保持主体人物面部特征完全不变，仅修改非面部区域' : '';
+    const finalPrompt = [userInstruction?.trim(), faceLock, combinedSteps, context].filter(Boolean).join('\n');
     console.log("Qwen Image Edit Prompt:", finalPrompt);
     fd.append('prompt', finalPrompt);
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowDownTrayIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
-import { urlToBlob } from '../services/gemini';
+import { urlToBlob, getApiBaseUrl } from '../services/gemini';
 
 interface DownloadPageProps {
   sourceUrl: string | null;
@@ -109,7 +109,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ sourceUrl, onConfirm
         fd.append('wm_opacity', String(wmOpacity));
         fd.append('wm_size', String(wmSize));
       }
-      const apiUrl = `http://${window.location.hostname}:8000/convert`;
+      const apiUrl = `${getApiBaseUrl()}/convert`;
 const res = await fetch(apiUrl, { method: 'POST', body: fd });
       if (!res.ok) throw new Error(await res.text());
       const out = await res.blob();
