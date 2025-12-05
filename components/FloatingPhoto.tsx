@@ -61,8 +61,8 @@ export const FloatingPhoto: React.FC<FloatingPhotoProps> = ({
   const baseX = parallax?.x ?? useMotionValue(0);
   const baseY = parallax?.y ?? useMotionValue(0);
   const factor = parallax?.factor ?? 0;
-  const xMV = useTransform(baseX, (v) => v * factor);
-  const yMV = useTransform(baseY, (v) => v * factor);
+  const xMV = useTransform(baseX, (v) => Number(v) * factor);
+  const yMV = useTransform(baseY, (v) => Number(v) * factor);
 
   return (
     <>

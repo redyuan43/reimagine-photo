@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowDownTrayIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
-import { urlToBlob, getApiBaseUrl } from '../services/gemini';
+import { urlToBlob, getApiBaseUrl } from '../services/core';
 
 interface DownloadPageProps {
   sourceUrl: string | null;

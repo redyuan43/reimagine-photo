@@ -5,6 +5,18 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
+      build: {
+        chunkSizeWarningLimit: 1200,
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              react: ['react', 'react-dom'],
+              motion: ['framer-motion'],
+              three: ['three'],
+            }
+          }
+        }
+      },
       server: {
         port: 3000,
         host: '0.0.0.0',

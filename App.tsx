@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { HomePage } from './components/HomePage';
-import { SmartEditor } from './components/SmartEditor';
 import { DNALoader } from './components/DNALoader';
-import { DownloadPage } from './components/DownloadPage';
-import { checkAndRequestApiKey } from './services/gemini';
+import { checkAndRequestApiKey } from './services/core';
+
+const HomePage = React.lazy(() => import('./components/HomePage').then(m => ({ default: m.HomePage })));
+const SmartEditor = React.lazy(() => import('./components/SmartEditor').then(m => ({ default: m.SmartEditor })));
+const DownloadPage = React.lazy(() => import('./components/DownloadPage').then(m => ({ default: m.DownloadPage })));
 
 export default function App() {
   const [page, setPage] = useState<'home' | 'smartEditor' | 'download'>('home');
@@ -135,28 +136,30 @@ export default function App() {
                     transition={{ duration: 0.3 }}
                     className="w-full h-full"
                   >
-                    {page === 'home' ? (
-                      <HomePage 
-                          onStart={handleStart} 
-                          lang={lang} 
-                          setLang={setLang} 
-                      />
-                    ) : page === 'smartEditor' ? (
-                      <SmartEditor
-                        imagePreview={imagePreview}
-                        imageFile={imageFile}
-                        initialPrompt={initialPrompt}
-                        onReset={handleReset}
-                        lang={lang}
-                        startMode={startMode}
-                        onGoToDownload={(url) => goToDownload(url)}
-                      />
-                    ) : (
-                      <DownloadPage
-                        sourceUrl={downloadSourceUrl}
-                        onBack={() => returnToEditorCompleted(downloadSourceUrl)}
-                      />
-                    )}
+                    <Suspense fallback={<DNALoader />}> 
+                      {page === 'home' ? (
+                        <HomePage 
+                            onStart={handleStart} 
+                            lang={lang} 
+                            setLang={setLang} 
+                        />
+                      ) : page === 'smartEditor' ? (
+                        <SmartEditor
+                          imagePreview={imagePreview}
+                          imageFile={imageFile}
+                          initialPrompt={initialPrompt}
+                          onReset={handleReset}
+                          lang={lang}
+                          startMode={startMode}
+                          onGoToDownload={(url) => goToDownload(url)}
+                        />
+                      ) : (
+                        <DownloadPage
+                          sourceUrl={downloadSourceUrl}
+                          onBack={() => returnToEditorCompleted(downloadSourceUrl)}
+                        />
+                      )}
+                    </Suspense>
                   </motion.div>
                 </AnimatePresence>
              )}

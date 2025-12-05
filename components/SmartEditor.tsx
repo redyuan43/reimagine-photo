@@ -21,7 +21,7 @@ import {
 import { ImageComparator } from './ImageComparator';
 import { CanvasMaskEditor } from './CanvasMaskEditor';
 import { DNALoader, BlinkingSmileIcon } from './DNALoader';
-import { analyzeImage, editImage, urlToBlob } from '../services/gemini';
+import { urlToBlob, getApiBaseUrl } from '../services/core';
 import { PlanItem } from '../types';
 
 const MagicWandIcon = SparklesIcon;
@@ -188,6 +188,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
       }
 
       // Start Streaming Analysis
+      const { analyzeImage } = await import('../services/analyze');
       const s = await analyzeImage(imageFile, (newItem) => {
           if (isMounted) {
               setPlanItems(prev => {
@@ -382,8 +383,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
         fd.append('format', 'jpeg');
         fd.append('quality', '80');
         fd.append('max_side', '2048');
-        const apiUrl = `${window.location.protocol}//${window.location.hostname}:8000/api/convert`;
-        const res = await fetch(apiUrl, { method: 'POST', body: fd });
+        const res = await fetch(`${getApiBaseUrl()}/convert`, { method: 'POST', body: fd });
         if (res.ok) {
           const blob = await res.blob();
           sourceBlob = blob;
@@ -422,6 +422,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
 
     try {
         console.log('[executeMagic] Starting, sourceBlob:', sourceBlob, 'activeSteps:', activeSteps.length);
+        const { editImage } = await import('../services/gemini');
         const resultUrl = await editImage(sourceBlob, activeSteps, instruction, '1K', sendName, summaryText);
         console.log('[executeMagic] editImage returned URL:', resultUrl);
         
@@ -481,6 +482,7 @@ export const SmartEditor: React.FC<SmartEditorProps> = ({
           };
           setPlanItems(prev => [...prev, maskStep]);
           
+          const { editImage } = await import('../services/gemini');
           const resultUrl = await editImage(baseImageBlob, activeSteps, prompt, '1K', 'image.png', summaryText);
           
           if (resultUrl) {

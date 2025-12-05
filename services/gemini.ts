@@ -1,31 +1,6 @@
 
 import { AnalysisResponse, PlanItem } from "../types";
-
-// --- API Configuration ---
-// 统一后端地址选择策略：
-// 1) 优先使用 VITE_API_BASE_URL（生产建议同源HTTPS，或指向API网关）
-// 2) 其次在 HTTPS 下使用同源（避免混合内容），在 HTTP 下使用 host:8000
-export const getApiBaseUrl = () => {
-  const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
-  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
-    return envUrl.replace(/\/$/, '');
-  }
-  if (typeof window !== 'undefined') {
-    // 自动检测当前访问地址，构建正确的后端URL
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    const port = window.location.port;
-    // 假设后端运行在当前主机的8000端口
-    const backendPort = '8000';
-    // 如果当前就是8000端口，说明前端也是通过FastAPI服务的，直接使用同源
-    if (port === '8000' || port === '') {
-      return `${window.location.origin}/api`;
-    }
-    // 否则，使用当前hostname的8000端口
-    return `${protocol}//${hostname}:${backendPort}/api`;
-  }
-  return 'http://localhost:3000/api';
-};
+import { getApiBaseUrl, urlToBlob, checkAndRequestApiKey } from "./core";
 
 // --- MOCK DATA ---
 
@@ -73,18 +48,10 @@ const MOCK_ITEMS: PlanItem[] = [
 ];
 
 // --- API Key Management (Mocked) ---
-export const checkAndRequestApiKey = async (): Promise<boolean> => {
-  console.log("Mock: API Key check bypassed for UI dev");
-  return true; 
-};
+export { checkAndRequestApiKey };
 
 // --- Helper (Unchanged) ---
-export const urlToBlob = async (url: string): Promise<Blob> => {
-  const isHttp = /^https?:\/\//i.test(url);
-  const proxied = isHttp ? `${getApiBaseUrl()}/proxy_image?url=${encodeURIComponent(url)}` : url;
-  const res = await fetch(proxied);
-  return await res.blob();
-};
+export { urlToBlob, getApiBaseUrl };
 
 // --- Analysis Service (Streaming Mock) ---
 // Now accepts a callback to stream items one by one
@@ -92,51 +59,11 @@ export const analyzeImage = async (
   file: File,
   onPartialResult: (item: PlanItem) => void
 ): Promise<string | undefined> => {
-  try {
-    const fd = new FormData();
-    fd.append('image', file);
-    fd.append('prompt', '');
-    const sse = await fetch(`${getApiBaseUrl()}/analyze_stream`, { method: 'POST', body: fd });
-    if (sse.ok && sse.headers.get('content-type')?.includes('text/event-stream')) {
-      const reader = sse.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let summary: string | undefined = undefined;
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop() || '';
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith('data:')) continue;
-          try {
-            const payload = JSON.parse(line.slice(5));
-            if (payload.type === 'item' && payload.item) {
-              onPartialResult(payload.item as PlanItem);
-            } else if (payload.type === 'final') {
-              summary = payload.summary as string | undefined;
-            }
-          } catch {}
-        }
-      }
-      return summary;
-    }
-    const res = await fetch(`${getApiBaseUrl()}/analyze`, { method: 'POST', body: fd });
-    if (res.ok) {
-      const data = await res.json() as { analysis?: PlanItem[], summary?: string };
-      const items = data.analysis || [];
-      for (const it of items) {
-        await new Promise(r => setTimeout(r, 150));
-        onPartialResult(it);
-      }
-      return data.summary || undefined;
-    }
-  } catch (e) {
-    console.warn('Backend analyze failed, falling back to mock.', e);
+  const mod = await import('./analyze');
+  const summary = await mod.analyzeImage(file, onPartialResult);
+  if (typeof summary !== 'undefined') {
+    return summary;
   }
-
   await new Promise(r => setTimeout(r, 800));
   for (const item of MOCK_ITEMS) {
     await new Promise(r => setTimeout(r, Math.random() * 800 + 400));
