@@ -834,17 +834,17 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
       
       {/* 0. Canvas Layers */}
       <canvas ref={canvasRef} className="z-0 block opacity-80" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
-      <div className="z-0 absolute inset-0 bg-gradient-to-b from-transparent via-[#0b0b0c]/50 to-[#0b0b0c] pointer-events-none" />
+      <div className="z-0 absolute inset-0 bg-gradient-to-b from-transparent via-[#0b0b0c]/50 to-[#0b0b0c] pointer-events-none" style={{ display: 'none' }} />
       
       <div ref={bhContainerRef} className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true" />
       {/* Premium Glow */}
-      <div className="z-0 absolute top-[-20%] left-[20%] w-[60vw] h-[60vw] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
-      <div className="z-0 absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-amber-600/5 blur-[100px] rounded-full pointer-events-none" />
+      <div className="z-0 absolute top-[-20%] left-[20%] w-[60vw] h-[60vw] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none animate-pulse" style={{ display: 'none', animationDuration: '8s' }} />
+      <div className="z-0 absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-amber-600/5 blur-[100px] rounded-full pointer-events-none" style={{ display: 'none' }} />
       
       <div ref={transitionLayerRef} className="z-10 pointer-events-none opacity-0" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
 
       {/* 1. Top Navigation */}
-      <nav className="absolute top-0 left-0 right-0 z-50 p-6 flex justify-between items-center">
+      <nav className="absolute top-0 left-0 right-0 z-50 p-6 flex justify-between items-center" style={{ display: 'none' }}>
          {/* Brand Left (Optional, kept clean for now) */}
          <div className="w-12"></div> 
 
@@ -872,7 +872,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
       {/* 2. Main UI Content */}
       <div 
-        className="z-30 relative w-full h-screen flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8"
+        className="hidden"
         onDragEnter={handleDragIn}
         onDragLeave={handleDragOut}
         onDragOver={handleDrag}
