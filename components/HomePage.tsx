@@ -34,6 +34,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const dragCounter = useRef(0);
+  const [showInput, setShowInput] = useState(false);
 
   // --- TRANSLATION ---
   const t = useMemo(() => ({
@@ -683,6 +684,19 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
     };
     const onTouchEnd = () => { isDragging = false; };
 
+    const onClickBH = (e: MouseEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      const dist = Math.hypot(dx, dy);
+      const threshold = Math.min(rect.width, rect.height) * 0.12; // 中心半径阈值
+      if (dist <= threshold) {
+        setShowInput(true);
+      }
+    };
+
     let rafId = 0;
     const animate = (time: number) => {
       rafId = requestAnimationFrame(animate);
@@ -703,6 +717,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
     window.addEventListener('touchstart', onTouchStart, { passive: true } as any);
     window.addEventListener('touchmove', onTouchMove, { passive: false } as any);
     window.addEventListener('touchend', onTouchEnd, { passive: true } as any);
+    renderer.domElement.addEventListener('click', onClickBH);
     animate(0);
 
     return () => {
@@ -714,6 +729,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
       window.removeEventListener('touchstart', onTouchStart as any);
       window.removeEventListener('touchmove', onTouchMove as any);
       window.removeEventListener('touchend', onTouchEnd as any);
+      renderer.domElement.removeEventListener('click', onClickBH);
       cancelAnimationFrame(rafId);
       geometry.dispose(); material.dispose(); renderer.dispose();
       if (renderer.domElement && renderer.domElement.parentElement) renderer.domElement.parentElement.removeChild(renderer.domElement);
@@ -836,7 +852,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
       <canvas ref={canvasRef} className="z-0 block opacity-80" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
       <div className="z-0 absolute inset-0 bg-gradient-to-b from-transparent via-[#0b0b0c]/50 to-[#0b0b0c] pointer-events-none" style={{ display: 'none' }} />
       
-      <div ref={bhContainerRef} className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true" />
+      <div ref={bhContainerRef} className="absolute inset-0 z-0" aria-hidden="false" />
       {/* Premium Glow */}
       <div className="z-0 absolute top-[-20%] left-[20%] w-[60vw] h-[60vw] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none animate-pulse" style={{ display: 'none', animationDuration: '8s' }} />
       <div className="z-0 absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-amber-600/5 blur-[100px] rounded-full pointer-events-none" style={{ display: 'none' }} />
@@ -1030,6 +1046,100 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
          </div>
       </div>
+
+      {/* White Dot Trigger */}
+      {!showInput && (
+        <motion.div
+            initial={{ opacity: 0.2, scale: 0.8, x: -20 }}
+            animate={{ 
+                opacity: [0.2, 0.8, 0.2],
+                scale: [0.8, 1, 0.8],
+                x: [0, 30], // Drifting slowly from center to right
+                boxShadow: [
+                    "0 0 2px rgba(255, 255, 255, 0.2)",
+                    "0 0 8px rgba(255, 255, 255, 0.6)",
+                    "0 0 2px rgba(255, 255, 255, 0.2)"
+                ]
+            }}
+            transition={{ 
+                opacity: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                scale: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                boxShadow: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                x: { duration: 30, repeat: Infinity, ease: "linear" } // Very slow movement (30s)
+            }}
+            whileHover={{ scale: 1.5, opacity: 1, transition: { duration: 0.3 } }}
+            className="fixed top-1/2 left-1/2 -ml-1 -mt-1 z-30 cursor-pointer group"
+            onClick={(e) => {
+                e.stopPropagation();
+                setShowInput(true);
+            }}
+        >
+            <div className="w-2 h-2 bg-white rounded-full blur-[0.5px]" />
+        </motion.div>
+      )}
+
+      {/* 输入框从黑洞中心出现 */}
+      <AnimatePresence>
+        {showInput && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.2, clipPath: 'circle(0px at 50% 50%)' }}
+            animate={{ opacity: 1, scale: 1, clipPath: 'circle(1200px at 50% 50%)' }}
+            exit={{ opacity: 0, scale: 0.8, clipPath: 'circle(0px at 50% 50%)' }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
+            className="fixed inset-0 z-40 flex items-center justify-center"
+          >
+            <div className="w-[min(92vw,600px)] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 shadow-2xl ring-1 ring-white/10">
+              <div className="flex items-center gap-3">
+                {/* File Trigger */}
+                <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-12 h-12 flex-shrink-0 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 transition-all overflow-hidden relative group"
+                >
+                    {filePreview ? (
+                        <img src={filePreview} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                    ) : (
+                        <PhotoIcon className="w-5 h-5" />
+                    )}
+                    {selectedFile && <div className="absolute inset-0 ring-2 ring-inset ring-amber-500/50 rounded-xl" />}
+                </button>
+
+                {/* Input */}
+                <input
+                  type="text"
+                  value={promptText}
+                  onChange={(e) => setPromptText(e.target.value)}
+                  placeholder={dict.describePlaceholder}
+                  className="flex-1 h-12 bg-transparent border-b border-white/10 focus:border-white/30 text-white placeholder-white/30 px-2 outline-none transition-colors"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                />
+
+                {/* Generate Button */}
+                <button
+                  onClick={handleSubmit}
+                  disabled={isLoading || !promptText.trim()}
+                  className="h-12 px-6 rounded-xl bg-white text-black font-medium hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {isLoading ? (
+                    <BlinkingSmileIcon className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                        <span>生成</span>
+                        <ArrowUpTrayIcon className="w-4 h-4 rotate-90" />
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              <div className="mt-4 flex justify-between items-center px-1">
+                 <p className="text-[10px] text-white/30 uppercase tracking-widest">AI Enhanced</p>
+                 <button onClick={() => setShowInput(false)} className="text-xs text-white/40 hover:text-white transition-colors">
+                    关闭
+                 </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
