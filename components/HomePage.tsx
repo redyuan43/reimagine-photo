@@ -249,6 +249,17 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
 
         checkStatus() {
             if (this.mode === 'meteor') {
+                // Explosion when meteor hits black hole center region
+                const cx = width / 2;
+                const cy = height / 2;
+                const dxBH = this.x - cx;
+                const dyBH = this.y - cy;
+                const distBH = Math.sqrt(dxBH * dxBH + dyBH * dyBH);
+                const bhThreshold = Math.min(width, height) * 0.30;
+                if (distBH <= bhThreshold) {
+                    createParticles(this.x, this.y, 'spark');
+                    return true;
+                }
                 const hitEdge = this.y >= height || this.x <= 0;
                 const burnedOut = this.life >= this.maxLife;
                 for (let i = 0; i < colliders.length; i++) {
@@ -691,7 +702,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
       const dx = e.clientX - cx;
       const dy = e.clientY - cy;
       const dist = Math.hypot(dx, dy);
-      const threshold = Math.min(rect.width, rect.height) * 0.12; // 中心半径阈值
+      const threshold = Math.min(rect.width, rect.height) * 0.30; // 中心半径阈值
       if (dist <= threshold) {
         setShowInput(true);
       }
@@ -1087,8 +1098,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
             exit={{ opacity: 0, scale: 0.8, clipPath: 'circle(0px at 50% 50%)' }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
             className="fixed inset-0 z-40 flex items-center justify-center"
+            onClick={() => setShowInput(false)}
           >
-            <div className="w-[min(92vw,600px)] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 shadow-2xl ring-1 ring-white/10">
+            <div className="w-[min(92vw,600px)] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 shadow-2xl ring-1 ring-white/10" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-3">
                 {/* File Trigger */}
                 <button 
@@ -1130,11 +1142,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onStart, lang, setLang }) =>
                 </button>
               </div>
               
-              <div className="mt-4 flex justify-between items-center px-1">
+              <div className="mt-4 flex justify-start items-center px-1">
                  <p className="text-[10px] text-white/30 uppercase tracking-widest">AI Enhanced</p>
-                 <button onClick={() => setShowInput(false)} className="text-xs text-white/40 hover:text-white transition-colors">
-                    关闭
-                 </button>
               </div>
             </div>
           </motion.div>
